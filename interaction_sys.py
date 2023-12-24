@@ -530,11 +530,11 @@ def calculate_index():
     # NOTE 这里应该输入数据的相对路径或者绝对路径
     # NOTE 建议使用相对路径而不是绝对路径，把数据放到该项目的文件夹里，大家都轻松
     # 指数数据地址
-    tt = "指数数据.xlsx"
+    tt = "data/指数数据.xlsx"
     # 指增基金数据地址
-    pp = "指增测试数据.xlsx"
+    pp = "data/指增测试数据.xlsx"
     # 非指增基金数据地址
-    qq = "非指增测试数据.xlsx"
+    qq = "data/非指增测试数据.xlsx"
 
     sign=input('如果您需要处理的数据为指增数据请输入1，反之输入2：')
     if sign==str(1):

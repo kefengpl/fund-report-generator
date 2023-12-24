@@ -1,3 +1,5 @@
+""" 在本项目完成后，该文件将实现用户交互的接口 """
+
 import hello
 import time
 import interaction_sys
