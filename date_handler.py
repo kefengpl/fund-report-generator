@@ -18,14 +18,17 @@ def scalar_to_date(input_date) -> date:
     Returns:
         date: date 格式的输入日期
     """
+    if type(input_date) == date:
+        return input_date
     if type(input_date) == str:
         separator = "/" if "/" in input_date else "-"
         _format = "%Y" + separator + "%m" + separator + "%d" 
         input_date = datetime.strptime(input_date, _format).date()
-    try:
-        input_date = input_date.date()
-    except:
-        raise ValueError("数据中的日期数据存在问题，程序无法将其转换为 datetime.date 类型")
+    else:
+        try:
+            input_date = input_date.date()
+        except:
+            raise ValueError("数据中的日期数据存在问题，程序无法将其转换为 datetime.date 类型")
     return input_date
 
 def list_to_date(date_list):
@@ -37,7 +40,7 @@ def list_to_date(date_list):
     """
     return list(map(lambda elem: scalar_to_date(elem), date_list))
 
-def last_date_of_month(month: int, year: int):
+def last_date_of_month(month: int, year: int) -> int:
     """
     返回每个月的最后一天
 
@@ -46,7 +49,7 @@ def last_date_of_month(month: int, year: int):
         - year (int): _description_
 
     Returns:
-        _type_: _description_
+        int: 返回给定年份、月份后，该月的最后一天
     """
     if month in [1, 3, 5, 7, 8, 10, 12]:
         return 31

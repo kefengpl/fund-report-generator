@@ -1,9 +1,9 @@
+""" 此文件作用在于绘图 """
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-from datetime import date
-
 
 def get_closest_val(val: float):
     """ 净值数据中，获取最接近某个 0.2 的下界/上界 """
@@ -40,10 +40,10 @@ def drop_suffix(_str: str, suffix: str = "标准化") -> str:
     Returns:
         str: _description_
     """
-    if _str.endswith(suffix):
-        return _str[:-len(suffix)]
     if _str.endswith("-" + suffix):
         return _str[:-(len(suffix) + 1)]
+    if _str.endswith(suffix):
+        return _str[:-len(suffix)]
     return _str
 
 def get_best_interval(worst_drawdown: float, tick_num: int) -> float:
@@ -193,4 +193,4 @@ class GraphDrawer:
         self.ax2.grid(axis='y', linestyle = "--",which = "major") # 设置横向虚线
         self.set_legend()
         output_path = "image/" + self.fund_name + "净值与回撤走势" + datetime.now().strftime("%y%m%d%H%M%S") + ".svg"
-        plt.savefig(output_path, bbox_inches = 'tight')
+        plt.savefig(output_path, bbox_inches = 'tight') # 保存文件为矢量图
