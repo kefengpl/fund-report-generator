@@ -2,6 +2,7 @@
 此代码之作用在于根据净值数据进行指标计算，暂时与原来500行的交互系统独立运行
 在本模块更新完毕后，就可以删除 interaction_sys.py
 """
+import math
 import numpy as np
 import pandas as pd
 from datetime import date
@@ -33,6 +34,25 @@ class Fund:
         self.fund_name = fund_name
         self.basic_data = self.get_basic_data()
         self.date_list = self.basic_data.index # 获得日期列表
+
+    def get_column_name(self, search_name: str = None) -> str:
+        """
+        获取合适的列名。例如，当 self.basic_data 列名是
+        [沣京价值增强一期 沣京价值增强一期-收益率 沣京价值增强一期-回撤  沣京价值增强一期-标准化]
+        这四列，输入 "收益" 或者 "收益率" 得到 列名 "沣京价值增强一期-收益率";
+        输入 "回撤" 得到 列名 "沣京价值增强一期-回撤"; 输入标准化，得到"沣京价值增强一期-标准化"
+        如果该参数是 None，那么返回第一列列名 "沣京价值增强一期"
+
+        Args:
+            search_name (str): 输入 "收益""收益率"(这二者得到结果一致)  "回撤" "标准化" 以得到该对象的数据表中对应的列名
+                               也可以输入 None，默认获取数据表 basic_data 第一列的列名
+
+        Returns:
+            str: 匹配到的数据表 basic_data 中的列名。如果匹配不到，代码自然会报错。
+        """
+        if not search_name:
+            return self.basic_data.columns[0]
+        return [column for column in self.basic_data.columns if (search_name in column.lstrip(self.fund_name))][0]
     
     def get_first_netval_date(self) -> date:
         """
@@ -155,6 +175,7 @@ class Fund:
     def all_year_return(self, start_year: int = None) -> dict:
         """
         获取所有年份的收益率，如果前面的年份收益数据无法计算，那么该年度得到 np.nan
+        NOTE BUG 这种算法使得基金成立那年的数据是无法计算的，因为第一年数据不全，有待修复。
 
         Args:
             start_year (int, optional): 年度收益率计算起始值，默认是None，此时会从日期序列的第一个日期所在年份开始计算
@@ -203,7 +224,8 @@ class Fund:
     
     def generate_month_list(self, start_year: int, start_month: int, 
                             end_year: int, end_month: int) -> list:
-        """ 此函数用于产生从 开始年月 到 结束年月 的所有月份列表，其中，某年某月以元组表示 """
+        """ 此函数用于产生从 开始年月 到 结束年月 的所有月份列表，其中，某年某月以元组表示
+        此函数是 all_month_return 的辅助函数 """
         result = []
         for month in range(start_month, 12 + 1):
             result.append((start_year, month))
@@ -213,7 +235,47 @@ class Fund:
         for month in range(1, end_month + 1):
             result.append((end_year, month))
         return result   
-
+    
+    def cumulative_return(self) -> dict:
+        """ 计算累计收益，就是 最后的净值数据 / 首个净值数据 - 1 """
+        return {"累计收益率" : self.net_val[self.get_last_date()] / self.net_val[self.get_first_netval_date()] - 1}
+    
+    def annual_return(self) -> dict:
+        """ 计算年化收益，注意：这里的计算模式是 (1 + 累计收益) ^ (365 / (最新日期 - 首个净值日期))  - 1 \n
+        NOTE BUG 注意！！时间那里不是 (最新日期 - 成立日期) ，故可能与周报数据有出入！！！  """
+        annual_return = pow(1 + next(iter(self.cumulative_return().values())), 
+                            365 / (self.get_last_date() - self.get_first_netval_date()).days) - 1
+        return {"年化收益率" : annual_return}
+    
+    def max_drawdown(self) -> dict:
+        """ 获取最大回撤 """
+        # 首先需要获取回撤那一列的列名，找不到就报错
+        column_name = self.get_column_name("回撤")
+        return {"最大回撤" : self.basic_data[column_name].min()}
+    
+    def annual_volatility(self) -> dict:
+        """ 获取年化波动率：NOTE BUG 注意：这里是直接计算的标准差，故可能与周报中的数据有出入 """
+        # 首先需要获取收益率那一列的列名，找不到就报错
+        column_name = self.get_column_name("收益")
+        return {"年化波动率" : self.basic_data[column_name].std() * math.sqrt(52)}
+    
+    def sharpe_ratio(self, risk_free_rate: int = 0.015) -> dict:
+        """ 获取夏普比率，无风险利率默认是 1.5% """
+        return {"夏普比率" : (next(iter(self.annual_return().values())) - risk_free_rate) / 
+                next(iter(self.annual_volatility().values()))}
+    
+    def weekly_win_rate(self) -> dict:
+        """ 获取周胜率 = 大于0的周度收益 / 所有有效的收益率数值个数 """
+        # 首先需要获取收益率那一列的列名，找不到就报错
+        column_name = self.get_column_name("收益")
+        weekly_return = self.basic_data[column_name]
+        return {"周胜率" : len(weekly_return[weekly_return > 0]) / (~weekly_return.isna()).sum()}
+    
+    def summary_indicators(self) -> dict: 
+        """ 汇总除了 年度收益 和 月度收益 之外的所有指标 """
+        return {**self.cumulative_return(), **self.annual_return(), **self.max_drawdown(),
+                **self.annual_volatility(), **self.sharpe_ratio(), **self.weekly_win_rate()}
+ 
 def main():
     data = pd.read_excel("data/中金量化测试数据.xlsx", index_col = 0)
     # NOTE 必须把成立日期和净值数据分开，否则
