@@ -127,14 +127,30 @@ class Fund:
         """
         return self.get_last_date() if not dh.date_in_range(raw_end_date, self.date_list) \
                                         else dh.find_closest_date(raw_end_date, self.date_list)
+    
+    def get_proper_start_date(self, raw_start_date: date, year: int, month: int = None) -> date:
+        """
+        由于某个基金可能是从一年的中间开始有净值的，raw_start_date 一般是上一年的12月31日，
+        则此时基金成立的首个年度或者首个月度，开始日期应设为首个净值日期.
+        如果 year 参数为 None，直接报错。如果有 year 但没有 month 参数，则仅匹配净值开始的年份。
+        如果有 year 且 month 参数，则匹配净值开始的月份。
+        """
+        if not year:
+            raise ValueError("年份参数 year 不能是空值")
+        check_year: bool = (year == self.get_first_netval_date().year)
+        check_month: bool = (month == self.get_first_netval_date().month) if month is not None else True
+        return  self.get_first_netval_date() if check_year and check_month  \
+                else dh.find_closest_date(raw_start_date, self.date_list) 
+
 
     def one_year_return(self, year: int) -> float:
-        """ 根据净值计算某一年的收益率，注意：算法是尽量匹配年末值，例如2017年理论值是 2017/12/31 净值 除以 2016/12/31 净值 - 1，
-        该方法会匹配与 2017/12/31 和 2016/12/31 最接近的日期，并寻找它们的净值数据,计算失败就返回 np.nan """
+        """ 根据净值计算某一年的收益率，注意：算法是尽量匹配年末值，例如2017年理论值是 2017/12/31 净值 除以 2016/12/31 净值 - 1；
+        该方法会匹配与 2017/12/31 和 2016/12/31 最接近的日期，并寻找它们的净值数据,计算失败就返回 np.nan；
+        NOTE 一些更新：基金净值日期的第一年也允许计算收益率，但是并不是全年的收益率，需要注意 """
         try:
             raw_start_date = date(year - 1, 12, 31)
             raw_end_date = date(year, 12, 31)
-            start_date = dh.find_closest_date(raw_start_date, self.date_list)
+            start_date = self.get_proper_start_date(raw_start_date, year)
             end_date = self.get_proper_end_date(raw_end_date)
             return self.net_val[end_date] / self.net_val[start_date] - 1
         except:
@@ -166,7 +182,7 @@ class Fund:
             raw_start_date = date(raw_start_year, raw_start_month, 
                                   dh.last_date_of_month(raw_start_month, raw_start_year))
             raw_end_date = date(year, month, dh.last_date_of_month(month, year))
-            start_date = dh.find_closest_date(raw_start_date, self.date_list)
+            start_date = self.get_proper_start_date(raw_start_date, year, month)
             end_date = self.get_proper_end_date(raw_end_date)
             return self.net_val[end_date] / self.net_val[start_date] - 1
         except:
