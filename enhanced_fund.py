@@ -1,7 +1,9 @@
 """ 此文件的作用在于，处理指增基金，它继承了 Fund 类，还包含一个 Fund 类 """
+import numpy as np
 import pandas as pd
 from datetime import date
 # 引入 Fund 模块
+import utils
 from fund import Fund
 import index_handler as ih
 
@@ -16,7 +18,8 @@ class EnhancedFund(Fund):
             - net_val (pd.Series): 基金净值数据，注意必须只包括净值数据，绝对不可以把成立日期那一行也包括进来
                                  索引index是时间序列，datetime 或者 date 格式
             - index_data (pd.DataFrame): 指数数据，最左侧列需要是日期，传入原始的收盘价即可，读取数据时注意必须加：index_col = 0。
-                                      注意：只允许传入一个指数的数据，表示的是该指增基金对标的指数，且列名是该指数的名称
+                                      注意：只允许传入一个指数的数据，表示的是该指增基金对标的指数，且列名是该指数的名称。
+                                      NOTE 尽一切可能保证 index_data 的首个有净值的日期出现在 net_val 的首个有净值的日期之前，或者二者相当
             - index_name (str): 指数的名称
             - start_date (date, optional): 希望从哪个日期开始计算，是人为指定的开始日期，其数值必须在传入数据的日期序列当中。
                                          默认值为 None，表示将从传入数据的首个有净值的日期开始计算. Defaults to None.
@@ -30,6 +33,7 @@ class EnhancedFund(Fund):
         self.index_name = index_name # 指数的名称
         self.excess_return: pd.Series = self.get_excess_return() # 计算超额收益
         # NOTE 无论前面有没有指定 start_date，这里都不需要指定开始日期，因为 correct_index_dates() 已经将指数日期与基金日期对齐了
+        # 也就是说，超额部分的数据不会早于基金最早的净值日期
         self.excess: Fund = Fund(self.fund_name + "-超额", self.excess_return) # 用于计算超额收益的各项数据
     
     def correct_index_dates(self):
@@ -46,11 +50,42 @@ class EnhancedFund(Fund):
         return initial_factor.cumprod() # 直接用累乘返回超额收益
 
     def get_chart_data(self) -> pd.Series:
-        """ 重载方法，用于获取指增类基金的绘图数据 """
-        merged_data = super().get_chart_data(self.index_data)
-        merged_data.drop("最大回撤(右轴)", axis = 1)
+        """ 重载方法，用于获取指增类基金的绘图数据，注意：这里以超额收益为基准，对数据进行截断。参数列表没有用 """
+        start_date: date = self.excess.start_date
+        # 对净值数据进行截断后标准化
+        truncated_netval: pd.Series = ih.IndexHandler(pd.DataFrame(self.net_val), start_date).index_data.iloc[:, 0]
+        merged_data = pd.DataFrame()
         merged_data["超额收益最大回撤(右轴)"] = self.excess.basic_data[self.excess.get_column_name("回撤")]
+        merged_data[self.fund_name] = truncated_netval
         merged_data["超额收益"] = self.excess.basic_data[self.excess.get_column_name("标准化")]
-        return merged_data
+        merged_data[self.index_name] = ih.IndexHandler(self.index_data, start_date).index_data.iloc[:, 0]
+        return merged_data[start_date:]
     
+    def return_risk_table(self, start_year: int = None) -> np.ndarray:
+        """
+        生成表格：“收益风险指标”每个单元格需要填充的内容。
+        注意：年度收益会包括基金净值数据第一年和最新一年的数据，即便这两个年份的收益率或许并不是全年的收益率。
+        NOTE 时间线对齐：start_date 以基金本身的 start_date 为基准：即 self.start_date
+
+        Args:
+            start_year (int, optional): 选择起始年份，如果没有选择，则从第一个净值日期所在年份开始计算. Defaults to None.
+        Returns:
+            np.ndarray: 返回 table 对应的矩阵，矩阵的行数和列数与 table 的行数和列数一致
+        """     
+        table_contents = []
+        table_headers = self.get_risk_table_headers()
+        table_contents.append(table_headers)
+        table_contents.append(self.get_risk_table_header_indicators()) # 开始时间： self.start_date
+        table_contents.append(Fund(self.index_name, self.index_data.iloc[:, 0], 
+                                   self.start_date).get_risk_table_header_indicators()) # 开始时间： self.start_date
+        # 为了生成表格便利，这里暂时改变的超额部分的名称
+        store_name = self.excess.fund_name
+        self.excess.fund_name = "超额收益"
+        table_contents.append(self.excess.get_risk_table_header_indicators()) # 开始时间：self.excess.start_date 
+        self.excess.fund_name = store_name
+        # 范围是 [start_year, end_year] 两侧都是闭区间
+        start_year = self.excess.get_first_netval_date().year if start_year is None else start_year
+        end_year = self.excess.get_last_date().year   
+        table_contents += self.excess.get_year_return_lines(start_year, end_year, len(table_headers) - 1)
+        return np.array(table_contents)
     

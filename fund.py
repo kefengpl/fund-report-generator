@@ -1,6 +1,5 @@
 """ 
-此代码之作用在于根据净值数据进行指标计算，暂时与原来500行的交互系统独立运行
-在本模块更新完毕后，就可以删除 interaction_sys.py
+此代码之作用在于根据净值数据进行指标计算，与原来500行的交互系统独立运行
 """
 import math
 import numpy as np
@@ -9,17 +8,21 @@ from datetime import date
 from datetime import datetime
 
 import date_handler as dh
+import index_handler as ih
+import utils
 
 class Fund:
-    def __init__(self, fund_name: str, create_time: date, net_val: pd.Series):
+    def __init__(self, fund_name: str, net_val: pd.Series, start_date: date = None, create_time: date = None):
         """
         构造一个基金类，它存储了基金的净值数据，成立日期，基金名称
 
         Args:
             - fund_name (str): 基金名称
-            - create_time (date): 基金成立日期，必须是 datetime.date 格式
+            - create_time (date): 基金成立日期，必须是 datetime.date 格式，可以不填
             - net_val (pd.Series): 基金净值数据，注意必须只包括净值数据，绝对不可以把成立日期那一行也包括进来
                                    index 是时间序列，datetime 或者 date 格式
+            - start_date(date): 希望从哪个日期开始计算，是人为指定的开始日期，其数值必须在传入数据的日期序列当中
+                                默认值为 None，表示将从传入数据的首个有净值的日期开始计算
             - basic_data (pd.DataFrame): 表示周报计算中的四列 "净值数据" "周度收益" "回撤" "标准化"。
               例如：沣京价值增强一期 沣京价值增强一期-收益率 沣京价值增强一期-回撤  沣京价值增强一期-标准化
               它是导出指标，可以自动计算。
@@ -28,10 +31,16 @@ class Fund:
             raise ValueError("你传入的参数没有任何数据，禁止构建此对象")
         # 日期统一为 datetime.date 格式，也就是有三个属性 year month day
         net_val.index = dh.list_to_date(net_val.index)
-        create_time = dh.scalar_to_date(create_time)
+        create_time = dh.scalar_to_date(create_time) if create_time is not None else create_time
         self.net_val = self.interpolation(net_val)
-        self.create_time = create_time 
+        self.create_time = create_time # NOTE 该变量似乎没有在后面的代码中使用
         self.fund_name = fund_name
+        if start_date is not None:
+            if start_date not in self.net_val.index:
+                raise ValueError(start_date, "开始日期必须在传入数据的日期序列里")
+            self.net_val = self.net_val[self.net_val.index >= start_date]
+        # 设置真正的开始日期[计算开始的日期]，如果人为指定了start_date，他就是指定的日期，否则是第一个有净值数据的日期
+        self.start_date = start_date if start_date is not None else self.get_first_netval_date()  
         self.basic_data = self.get_basic_data()
         self.date_list = self.basic_data.index # 获得日期列表
 
@@ -56,7 +65,9 @@ class Fund:
     
     def get_first_netval_date(self) -> date:
         """
-        获取第一个净值日期
+        获取第一个净值日期。
+        显然，给定 start_date 的情况下，由于存在数据截断，所以该函数依然适用，即它也能取出 
+        从 start_date 开始的第一个有净值数据的日期
 
         Returns:
             date: 该基金有净值数据的首个日期
@@ -164,10 +175,6 @@ class Fund:
         以及 距离 2023/3/31 最近的日期。本函数就是在查找这些近似日期，找到对应的净值数据，从而得到收益率 
         如果数据不全或缺失，会直接返回 np.nan
 
-        - 如果下面这俩参数都是空值，该函数将从输入数据的首个月份开始计算，比如从 2007年9月开始计算，当然，这样会
-        产生很多空值。
-        - 如果下面这俩参数中，year 不空，month 空，
-
         Args:
             - year (int): 输入 int 类型表示的年份值，比如2023，默认是 None
             - month (int): 输入 int 类型表示的月份值，比如12，默认是 None
@@ -191,7 +198,8 @@ class Fund:
     def all_year_return(self, start_year: int = None) -> dict:
         """
         获取所有年份的收益率，如果前面的年份收益数据无法计算，那么该年度得到 np.nan
-        NOTE BUG 这种算法使得基金成立那年的数据是无法计算的，因为第一年数据不全，有待修复。
+        NOTE 一些更新：基金净值日期的第一年允许计算收益率，但是并不是全年的收益率，需要注意
+        NOTE 基金净值最后一年允许计算收益率，但是表示 当年以来的收益率，并不是全年的收益率
 
         Args:
             start_year (int, optional): 年度收益率计算起始值，默认是None，此时会从日期序列的第一个日期所在年份开始计算
@@ -211,11 +219,13 @@ class Fund:
     def all_month_return(self, start_point: tuple = (None, None)) -> dict:
         """
         获取所有月份的收益率，如果前面月份的收益率无法计算，那么该月份就得到 np.nan
+        - NOTE 一些更新：基金净值日期的第一年允许计算收益率，但是并不是全年的收益率，需要注意
+        - NOTE 基金净值最后一年允许计算收益率，但是表示 当年以来的收益率，并不是全年的收益率
 
         Args:
             start_point (tuple, optional): 一个元组，第一个括号内写年份，第二个括号内写月份
             你可以设置从何年何月开始计算，默认是(None, None).如果你只设置了年份，那么会从该年1月开始计算；
-            如果你只设置了月份，那么该函数会报错.
+            如果你只设置了月份，那么该函数会报错. \n
 
         Returns:
             dict: 所有月度的收益率数据
@@ -291,19 +301,173 @@ class Fund:
         """ 汇总除了 年度收益 和 月度收益 之外的所有指标 """
         return {**self.cumulative_return(), **self.annual_return(), **self.max_drawdown(),
                 **self.annual_volatility(), **self.sharpe_ratio(), **self.weekly_win_rate()}
- 
-def main():
-    data = pd.read_excel("data/中金量化测试数据.xlsx", index_col = 0)
-    # NOTE 必须把成立日期和净值数据分开，否则
-    name_list = data.columns
-    date_list = list(data.loc["日期"])
-    data = data.drop("日期", axis = 0)
-    the_fund = Fund(name_list[0], date_list[0], data[name_list[0]])
-    #the_fund.basic_data.to_excel("output.xlsx")
-    print(the_fund.all_month_return())
+    
+    def history_return_table(self, start_year: int = None) -> np.ndarray:
+        """
+        生成历史月度收益率表格每个单元格需要填充的内容
 
-if __name__ == "__main__":
-    main()
+        Args:
+            start_year (int, optional): 选择起始年份，如果没有选择，则从第一个净值日期所在年份开始计算. Defaults to None.
+        
+        Returns:
+            np.ndarry: 返回 table 对应的矩阵，矩阵的行数和列数与 table 的行数和列数一致
+        """
+        # 范围是 [start_year, end_year] 两侧都是闭区间
+        start_year = self.get_first_netval_date().year if start_year is None else start_year
+        end_year = self.get_last_date().year
+        return_matrix = []
+        table_headers =  ["年份"] + [str(idx) + "月" for idx in range(1, 13)] + ["全年"]
+        return_matrix.append(table_headers)
+        for year in range(end_year, start_year - 1, -1):
+            return_matrix.append(self.get_month_return_line(year))
+        return np.array(return_matrix)
+    
+    def return_risk_table(self, start_year: int = None) -> np.ndarray:
+        """
+        生成表格：“收益风险指标”每个单元格需要填充的内容。
+        注意：年度收益会包括基金净值数据第一年和最新一年的数据，即便这两个年份的收益率或许并不是全年的收益率。
 
+        Args:
+            start_year (int, optional): 选择起始年份，如果没有选择，则从第一个净值日期所在年份开始计算. Defaults to None.
+        Returns:
+            np.ndarray: 返回 table 对应的矩阵，矩阵的行数和列数与 table 的行数和列数一致
+        """     
+        table_contents = []
+        table_headers = self.get_risk_table_headers()
+        indicators_line = self.get_risk_table_header_indicators()
+        table_contents.append(table_headers)
+        table_contents.append(indicators_line)
 
+        # 范围是 [start_year, end_year] 两侧都是闭区间
+        start_year = self.get_first_netval_date().year if start_year is None else start_year
+        end_year = self.get_last_date().year   
+        table_contents += self.get_year_return_lines(start_year, end_year, len(table_headers) - 1)
+        return np.array(table_contents)
+    
+    def get_risk_table_headers(self) -> list:
+        """ 生成表格：“收益风险指标” 的表头 """
+        return ["指标", "累计收益率", "年化收益率", "最大回撤", "年化波动率", "夏普比率", "周胜率"]
+    
+    def get_risk_table_header_indicators(self) -> list:
+        """ 生成表格： “收益风险指标” 表头对应的数值"""
+        indicators = self.summary_indicators()
+        return [self.fund_name] +  [utils.round_decimal(indicators[key]) if "夏普" in key else 
+                                               utils.decimal_to_pct(indicators[key]) for key in indicators.keys()]
+
+    
+    def get_year_return_lines(self, start_year: int, end_year: int, one_row_nums: int = 6) -> list:
+        """
+        获取 “收益风险指标” 表格中 年度/收益 年度/收益这些行，范围是从 [start_year, end_year] 
+
+        Args:
+            - start_year (int): 开始年份
+            - end_year (int): 结束年份
+            - one_row_nums (int, optional): 一行包含几年的收益率指标？ Defaults to 6.
+
+        Returns:
+            list:  “收益风险指标” 表格中 年度/收益 这些行需要填充的内容。注意：某些行没有填满，必须以空字符串""代替
+        """
+        year_nums = (end_year - start_year + 1)
+        total_year_list = [year for year in range(end_year, start_year - 1, -1)]
+        iter_nums = year_nums // one_row_nums + (0 if year_nums % one_row_nums == 0 else 1)
+        result = []
+        for iterator in range(iter_nums):
+            year_list = total_year_list[iterator * one_row_nums : (iterator + 1) * one_row_nums]
+            year_list += [None] * (one_row_nums - len(year_list))
+            header_line = ["年度"] + ["" if elem is None else str(elem) + "年" for elem in year_list]
+            value_line = [self.one_year_return(year) for year in year_list]
+            value_header = "超额收益" if "超额" in self.fund_name else "收益"
+            value_line = [value_header] + [utils.decimal_to_pct(elem) if not pd.isna(elem) else "" for elem in value_line]
+            result.append(header_line)
+            result.append(value_line)
+        return result
+
+    def get_month_return_line(self, year: int) -> list:
+        """ 
+        生成私募报告中“历史收益分析”某一行的数据
+        获取某一年的月度收益率数据 + 全年数据(最后一年和净值日期开始的年份的“全年”列默认是空值) \n
+        NOTE 基金净值首个月收益率和最新一个月的收益率可能并不是整个月的收益率，但是会被包括在下表中。
+        比如：如果数据只到2023/10/21，那么2023年10月的收益率表示的是从10月初到2023/10/21日的收益率
+        """
+        monthly_return = [self.one_month_return(year, month) for month in range(1, 13)]
+        monthly_return = ["-" if pd.isna(elem) else utils.decimal_to_pct(elem) for elem in monthly_return]
+        # NOTE 这里简化处理：基金净值日期第一年和基金净值日期最后一年的“全年”列都是空值
+        check_year: bool = (year == self.get_first_netval_date().year) or (year == self.get_last_date().year)
+        yearly_return =  ["-"] if check_year else [utils.decimal_to_pct(self.one_year_return(year))]
+        return [str(year)] + monthly_return + yearly_return
+    
+    def get_chart_data(self, index_data: pd.DataFrame) -> str:
+        """
+        获取绘制净值走势和回撤的数据[一般包含基金标准化净值，回撤，指数数据]，
+        会从开始日期 或者 第一个净值日期 开始计算
+
+        Args:
+            - index_data(pd.DataFrame): 指数数据，可以是指数的原始数据，支持同时传入多个指数
+        Returns:
+            返回导出作图文件的名称
+        """
+        start_date: date = self.start_date
+        index_handler = ih.IndexHandler(index_data, start_date)
+        drawdown_col_name = self.get_column_name("回撤")
+        standalized_col_name = self.get_column_name("标准化")
+        the_fund_data = self.basic_data[[drawdown_col_name, 
+                                         standalized_col_name]][self.basic_data.index >= start_date]
+        the_fund_data.rename(columns = {standalized_col_name : utils.drop_suffix(standalized_col_name),
+                                        drawdown_col_name : "最大回撤(右轴)"}, inplace = True)
+        return the_fund_data.merge(index_handler.index_data, how = "left", left_index = True, right_index = True)
+    
+    def export_chart_data(self, merged_data: pd.Series) -> str:
+        """ 将 get_chart_data 的返回结果进行导出，返回导出的作图文件的名称 """
+        file_name = utils.generate_filename("__" + self.fund_name + "作图数据") 
+        merged_data.to_excel("output/" + file_name)
+        return file_name
+
+    def get_analyze_text(self, start_year: int = None):
+        """ 获取私募报告中要填写的分析文本
+
+        模板：中金量化-贝叶斯稳健 1 号 2020 年 12 月以来累计收益 53.1%，年化收益 15.6%，产品正常运作以来最大回撤-6.7%，夏普 1.5，胜率 55.0%。
+              分年度看，2021 年收益 37.2%、2022 年收益 4.5%、2023 年截至 12 月 1 日收益 6.8%。 
+        
+        Args:
+            start_year(int): 可以指定在分析年度收益时，从哪年开始分析，可选参数。
+        """
+        blank_fill = "超额" if "超额" in self.fund_name else ""
+        fund_name = self.fund_name.rstrip("-超额")
+        start_time = self.start_date.strftime("%Y年%m月")
+        cumulative_return = utils.decimal_to_pct(list(self.cumulative_return().values())[0])
+        annual_return = utils.decimal_to_pct(list(self.annual_return().values())[0])
+        max_drawdown = utils.decimal_to_pct(list(self.max_drawdown().values())[0])
+        sharpe_ratio = utils.round_decimal(list(self.sharpe_ratio().values())[0])
+        weekly_win_rate = utils.decimal_to_pct(list(self.weekly_win_rate().values())[0])
+        template_str = f"{fund_name}{start_time}以来累计{blank_fill}收益{cumulative_return}，" + \
+                       f"年化{blank_fill}收益{annual_return}，产品正常运作以来{blank_fill}最大回撤{max_drawdown}，" + \
+                       f"{blank_fill}夏普比率{sharpe_ratio}，{blank_fill}周胜率{weekly_win_rate}。"
+        
+        start_year = self.start_date.year if start_year is None else start_year
+        end_year = self.get_last_date().year
+        start_day = self.start_date.strftime("%m月%d日")
+        start_year_return = utils.decimal_to_pct(self.one_year_return(start_year))
+        yearly_return_str = f"分年度看，{start_year}年从{start_day}到年底{blank_fill}收益{start_year_return}、" \
+                            if start_year == self.start_date.year else f"分年度看，{start_year}年{blank_fill}收益{start_year_return}、"
+        for year in range(start_year + 1, end_year):
+            year_return = utils.decimal_to_pct(self.one_year_return(year))
+            yearly_return_str += f"{year}年{blank_fill}收益{year_return}、"
+        end_day = self.get_last_date().strftime("%m月%d日")
+        end_year_return = utils.decimal_to_pct(self.one_year_return(end_year))
+        yearly_return_str += f"{end_year}年截至{end_day}{blank_fill}收益{end_year_return}。"
+        return template_str + yearly_return_str
+    
+    def get_footnote_text(self, corp_name: str) -> str:
+        """
+        生成文本[数据来源：中金量化；指标计算区间为 2020 年 12 月 25 日至 2023 年 12 月 1 日。] \n
+        NOTE BUG 注意：暂时不支持根据表格table的start_year动态调整指标计算区间的起始值
+
+        Args:
+            corp_name(str): 私募报告所涉及私募基金公司的名称
+        """
+        start_date_str = self.start_date.strftime("%Y年%m月%d日")
+        end_date_str = self.get_last_date().strftime("%Y年%m月%d日")
+        return f"数据来源：{corp_name}，指标计算区间为{start_date_str}至{end_date_str}"
+        
+        
 

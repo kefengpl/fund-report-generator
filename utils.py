@@ -65,8 +65,9 @@ def generate_filename(file_name: str, _suffix: str = ".xlsx") -> str:
         str: 添加数字码的文件名称
     """
     current_time: datetime = datetime.now()
-    time_str: str = str(current_time.year)[-2:] + str(current_time.month) + str(current_time.day) \
-               + str(current_time.hour) + str(current_time.minute) + str(current_time.second)
+    template_str = "{:02d}"
+    time_str: str = str(current_time.year)[-2:] + template_str.format(current_time.month) + template_str.format(current_time.day) \
+               + template_str.format(current_time.hour) + template_str.format(current_time.minute) + template_str.format(current_time.second)
     return file_name + time_str + _suffix
 
 def drop_suffix(_str: str, suffix: str = "标准化") -> str:

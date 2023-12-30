@@ -1,24 +1,14 @@
 """ 此类用于处理 word 中的 Table 对象 """
+# 引入第三方包
 import numpy as np
 import win32com.client as win32
 
-color_dict = {
-    "deep_red" : 0xC00000,
-    "orange" : 0xFFC000,
-    "deep_grey" : 0x7F7F7F,
-    "shallow_red" : 0xFFCCCC,
-    "shallow_grey" : 0xBFBFBF
-}
-def convert_to_RGB(BGR_value: int):
-    """ 通过位运算将 BGR 转为 RGB """
-    blue = (BGR_value & 0xFF0000) >> 16
-    green = (BGR_value & 0x00FF00) >> 8
-    red = BGR_value & 0x0000FF
-    return (red << 16) | (green << 8) | blue
+# 引入自己写的模块
+import utils
 
 class WordTableHandler:
-    def __init__(self, table, title_mode: str, chinese_font: str = "楷体", 
-                 english_font: str = "Times New Roman", font_size: float = 8):
+    def __init__(self, table, table_width: int, title_mode: str, chinese_font: str = "楷体", 
+                 english_font: str = "Times New Roman", font_size: float = 10.5):
         """
         此类用于处理 word table 对象
 
@@ -31,19 +21,26 @@ class WordTableHandler:
                                 "first" 表示表头分布在第一行以及第一列，所以会对第一行和第一列进行填充.
         """
         self.table = table
-        self.table_fill_color = convert_to_RGB(color_dict["deep_red"]) # 填写16进制 RGB，表示表格需要填充的颜色
-        self.row_height = 20 # 设置每行的行高
+        self.table_fill_color = utils.RGB_tuple_to_float(utils.color_dict["deep_red"]) # 填写16进制 RGB，表示表格需要填充的颜色
+        self.row_height = 25 # 设置每行的行高
         self.chinese_font = chinese_font
         self.english_font = english_font
         self.font_size = font_size
         self.title_mode = title_mode
-        if self.title_mode not in ["sep", "first", "first_row", "first_col"]:
-            raise ValueError(r"title_mode 只能是(sep, first, first_row, first_col)之一")
+        if self.title_mode not in ["sep", "weak_sep", "first", "first_row", "first_col"]:
+            raise ValueError(r"title_mode 只能是(sep, weak_sep, first, first_row, first_col)之一")
+        # 设置表格整体宽度
+        self.table.PreferredWidthType = win32.constants.wdPreferredWidthPoints
+        self.table.PreferredWidth = table_width
+        # 设置表格在页面整体居中对齐
+        self.table.Rows.Alignment  = win32.constants.wdAlignRowCenter
     
     def get_rows(self) -> int:
+        """ 获取 table 对象的行数 """
         return len(self.table.Rows)
 
     def get_cols(self) -> int:
+        """ 获取 table 对象的列数 """
         return len(self.table.Columns)
     
     def set_cell_text_format(self, cell):
@@ -55,7 +52,7 @@ class WordTableHandler:
         pf = cell.Range.ParagraphFormat # 获得单元格段落格式对象
         pf.Alignment = win32.constants.wdAlignParagraphCenter # 设置水平居中
         pf.LineSpacingRule = win32.constants.wdLineSpaceExactly # 设置固定行距
-        pf.LineSpacing = 9 # 15 pond 1.25x 行距
+        pf.LineSpacing = self.font_size # 单倍固定行距
 
     def fill_one_line(self, idx: int, fill_color: int, _type: str = "row"):
         """
@@ -88,6 +85,8 @@ class WordTableHandler:
             return col_idx == 0 or row_idx == 0
         if self.title_mode == "sep":
             return col_idx == 0 or (row_idx % 2 == 0)
+        if self.title_mode == "weak_sep":
+            return col_idx == 0 or  (row_idx % 2 == 0 and row_idx != 2)
 
     def fill_table_color(self):
         """ 给表格的表头部分上色 """
@@ -98,10 +97,15 @@ class WordTableHandler:
         elif self.title_mode == "first":
             self.fill_one_line(0, self.table_fill_color, "col")
             self.fill_one_line(0, self.table_fill_color, "row")
-        else:
+        elif self.title_mode == "sep":
             self.fill_one_line(0, self.table_fill_color, "col")
             for idx in range(self.get_rows()):
                 if idx % 2 == 0:
+                    self.fill_one_line(idx, self.table_fill_color, "row")
+        else:
+            self.fill_one_line(0, self.table_fill_color, "col")
+            for idx in range(self.get_rows()):
+                if idx % 2 == 0 and idx != 2:
                     self.fill_one_line(idx, self.table_fill_color, "row")
 
     def set_rows_height(self):
@@ -116,7 +120,7 @@ class WordTableHandler:
                 win32.constants.wdBorderHorizontal, win32.constants.wdBorderVertical]
         for border in borders:
             self.table.Borders(border).LineStyle = win32.constants.wdLineStyleSingle
-            self.table.Borders(border).LineWidth = 6 
+            self.table.Borders(border).LineWidth = win32.constants.wdLineWidth025pt
 
     def add_one_cell_text(self, row_idx: int, col_idx: int, text: str):
         """
