@@ -38,7 +38,7 @@ class Fund:
         if start_date is not None:
             if start_date not in self.net_val.index:
                 raise ValueError(start_date, "开始日期必须在传入数据的日期序列里")
-            self.net_val = self.net_val[self.net_val.index >= start_date]
+            self.net_val = self.net_val[self.net_val.index >= start_date] # 手动设置起始日期后会截取净值数据
         # 设置真正的开始日期[计算开始的日期]，如果人为指定了start_date，他就是指定的日期，否则是第一个有净值数据的日期
         self.start_date = start_date if start_date is not None else self.get_first_netval_date()  
         self.basic_data = self.get_basic_data()
@@ -82,7 +82,32 @@ class Fund:
     def get_last_date(self) -> date:
         """ 获取数据中的最新净值日期 """
         return self.net_val.index[-1]
+    
+    def err_check_start_year_ge_first(self, start_year: int):
+        """
+        检查后面一些函数的起始年份是否在净值数据表的首年及之后。
+        (允许前面几年净值数据是空值) ge 代表 greater equal (>=)
+        比如，如果传入周报的某些数据，从2007年开始。那么 start_year >= 2007 即可
 
+        Args:
+            start_year (int): 开始年份
+        """
+        if start_year is not None and start_year < self.get_first_date().year:
+            raise ValueError("错误值：", start_year, " 起始年份不得早于：", self.get_first_date().year)
+        
+    def err_check_start_year_ge_first_netval(self, start_year: int):
+        """
+        检查后面一些函数的起始年份是否在净值数据不为空的首年及之后。
+        (允许前面几年净值数据是空值) ge 代表 greater equal (>=)
+        比如，如果传入周报的某些数据，虽然从2007年开始，但是某基金产品净值数据从2018年开始，那么
+        需要 start_year >= 2018
+
+        Args:
+            start_year (int): 开始年份
+        """
+        if start_year is not None and start_year < self.get_first_netval_date().year:
+            raise ValueError("错误值：", start_year, " 起始年份不得早于：", self.get_first_netval_date().year)
+        
     def interpolation(self, net_val: pd.Series):
         """
         进行插值填充数据
@@ -207,6 +232,8 @@ class Fund:
         Returns:
             dict: 所有范围内年份的收益率数据
         """
+        self.err_check_start_year_ge_first(start_year)
+        
         # 设定计算开始年份
         start_year: int = self.get_first_date().year if start_year is None else start_year
         # 设定计算结束年份
@@ -232,6 +259,10 @@ class Fund:
         """
         if (not start_point[0]) and start_point[1]:
             raise ValueError("不允许只输入月份而不输入年份")
+        self.err_check_start_year_ge_first(start_point[0])
+        if start_point[0] is not None and start_point[0] == self.get_first_date().year and start_point[1] < self.get_first_date().month:
+            raise ValueError("错误值：", start_point, "起始年份的月份不得早于净值数据表中最早日期的月份：", self.get_first_date().month)
+        
         start_year = None
         start_month = None
         if start_point[0] and start_point[1]:
@@ -312,6 +343,7 @@ class Fund:
         Returns:
             np.ndarry: 返回 table 对应的矩阵，矩阵的行数和列数与 table 的行数和列数一致
         """
+        self.err_check_start_year_ge_first_netval(start_year)
         # 范围是 [start_year, end_year] 两侧都是闭区间
         start_year = self.get_first_netval_date().year if start_year is None else start_year
         end_year = self.get_last_date().year
@@ -332,6 +364,8 @@ class Fund:
         Returns:
             np.ndarray: 返回 table 对应的矩阵，矩阵的行数和列数与 table 的行数和列数一致
         """     
+        self.err_check_start_year_ge_first_netval(start_year)
+
         table_contents = []
         table_headers = self.get_risk_table_headers()
         indicators_line = self.get_risk_table_header_indicators()
@@ -431,6 +465,8 @@ class Fund:
         Args:
             start_year(int): 可以指定在分析年度收益时，从哪年开始分析，可选参数。
         """
+        self.err_check_start_year_ge_first_netval(start_year)
+
         blank_fill = "超额" if "超额" in self.fund_name else ""
         fund_name = self.fund_name.rstrip("-超额")
         start_time = self.start_date.strftime("%Y年%m月")
@@ -447,6 +483,11 @@ class Fund:
         end_year = self.get_last_date().year
         start_day = self.start_date.strftime("%m月%d日")
         start_year_return = utils.decimal_to_pct(self.one_year_return(start_year))
+
+        if start_year == end_year: # NOTE 特殊情况，比如只有2023年需要分析的情况
+            end_day = self.get_last_date().strftime("%m月%d日")
+            return template_str + f"分年度看，{start_year}年从{start_day}截至{end_day}{blank_fill}收益{start_year_return}。"
+        
         yearly_return_str = f"分年度看，{start_year}年从{start_day}到年底{blank_fill}收益{start_year_return}、" \
                             if start_year == self.start_date.year else f"分年度看，{start_year}年{blank_fill}收益{start_year_return}、"
         for year in range(start_year + 1, end_year):
@@ -467,7 +508,7 @@ class Fund:
         """
         start_date_str = self.start_date.strftime("%Y年%m月%d日")
         end_date_str = self.get_last_date().strftime("%Y年%m月%d日")
-        return f"数据来源：{corp_name}，指标计算区间为{start_date_str}至{end_date_str}"
+        return f"数据来源：{corp_name}，指标计算区间为{start_date_str}至{end_date_str}。"
         
         
 

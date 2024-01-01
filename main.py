@@ -1,4 +1,4 @@
-""" 在本项目完成后，该文件将实现用户交互的接口 """
+""" 文件是实现用户交互的接口，用以设置数据文件路径，获得基金产品报告 """
 
 import pandas as pd
 from report_generate import *
@@ -18,14 +18,14 @@ def single_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, c
     fund_name = netval_data.columns[0]
     index_name = index_data.columns[0]
     generate_report(netval_data.iloc[:, 0], index_data, enhanced_fund, corp_name,
-                    analyze_text_start_year = 2021, fund_name = fund_name, index_name = index_name)
+                    fund_name = fund_name, index_name = index_name)
 
 def main():
-    netval_path = "data/九章幻方中证500量化多策略1号.xlsx"
-    index_path = "data/中证500.xlsx"
-    corp_name = "九坤投资"
-    # NOTE 你需要手动指定该基金是否是指增基金
-    single_fund_report(netval_path, index_path, enhanced_fund = True, corp_name = corp_name)
+    netval_path = "data/图灵进取中证1000指数增强-净值数据.xlsx" # 净值数据表路径，只会处理前两列数据，后面列的数据会被直接忽略。
+    index_path = "data/图灵进取中证1000指数增强-指数数据.xlsx"  # 指数数据表路径：① 非指增：允许添加多列指数数据；② 指增：只允许添加一列指数数据
+    enhanced_fund = True # 需要在参数中手动指明是否是指增类基金，False表示不是指增基金，True表示指增基金
+    corp_name = "图灵基金" # 私募基金管理人名称
+    single_fund_report(netval_path, index_path, enhanced_fund, corp_name)
 
 if __name__ == "__main__":
     main()

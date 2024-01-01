@@ -32,21 +32,25 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
         - enhanced_fund (bool): 是否是指增基金
         - start_date (date, optional): 起始计算日期，可以不填，如果填写必须填 datetime.date 格式. Defaults to None.
         - create_date (date, optional): 基金成立日期，可以不填，如果填写必须填 datetime.date 格式. Defaults to None.
-        - kwargs: 其它可选参数，需要个性化定制：① 可选参数： analyze_text_start_year ，它表示获得分析文本的年度收益时，从哪一年开始
+        - kwargs: 其它可选参数，需要个性化定制，目前支持的可选参数如下：\n
+            ① analyze_text_start_year ，可选参数，它表示获得分析文本的年度收益时，从哪一年开始 \n
+            ② history_table_start_year ，可选参数，它表示 历史收益数据表计算月度数据时，从哪一年开始
     """
     fund_name = kwargs.get("fund_name")
     index_name = kwargs.get("index_name")
+    analyze_text_start_year = kwargs.get("analyze_text_start_year", None)
+    history_table_start_year = kwargs.get("history_table_start_year", None)
     this_fund = ef.EnhancedFund(fund_name, netval_data, index_data, index_name, start_date, create_date) \
                 if enhanced_fund else fund.Fund(fund_name, netval_data, start_date, create_date)
     # PART1：获取生成word所需要的数据
     return_risk_table = this_fund.return_risk_table() # 获取表格“收益风险指标”所有单元格的数据
-    history_return_table = property_method(enhanced_fund, "history_return_table", this_fund)(2020) # 获取“历史收益分析”所有单元格的数据
+    history_return_table = property_method(enhanced_fund, "history_return_table", this_fund)(history_table_start_year) # 获取“历史收益分析”所有单元格的数据
     # 获取绘图数据，由于二者参数不一致，所以无法重载
     draw_data = this_fund.get_chart_data() if enhanced_fund else this_fund.get_chart_data(index_data)
     file_name = this_fund.export_chart_data(draw_data) # 导出绘图数据，并返回文件名
     file_abs_path = os.path.abspath("output/" + file_name) # 由于win32py只有绝对路径，所以把相对路径转为绝对路径
     # 获取分析文本那一段话
-    analyze_text = property_method(enhanced_fund, "get_analyze_text", this_fund)(kwargs.get("analyze_text_start_year", None)) 
+    analyze_text = property_method(enhanced_fund, "get_analyze_text", this_fund)(analyze_text_start_year) 
     footer_text = this_fund.get_footnote_text(corp_name) # 获取两个表格的脚注文本
     blank_fill = "超额" if enhanced_fund else ""
 
@@ -57,7 +61,7 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
     word_handler.add_text_content("1. " + this_fund.fund_name, "title")
     # 生成净值走势图和脚注
     word_handler.add_excel_chart(file_abs_path)
-    word_handler.add_text_content("数据来源：" + corp_name + "，Wind; ", "footnote")
+    word_handler.add_text_content("数据来源：" + corp_name + "，Wind", "footnote")
     word_handler.add_text_content("", "footnote")
     # 生成标题
     word_handler.add_text_content("1) 业绩分析", "title")
