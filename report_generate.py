@@ -55,7 +55,7 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
     blank_fill = "超额" if enhanced_fund else ""
 
     # PART2：开始写入 WORD
-    word_handler = wh.WordHandler(visible = False)
+    word_handler = wh.WordHandler(visible = True) 
     word_handler.set_page_layout() # 把 A4 纸横过来
     # 生成标题
     word_handler.add_text_content("1. " + this_fund.fund_name, "title")

@@ -47,8 +47,8 @@ class WordHandler:
         right_margin = 72  # 1 inch
 
         # 设置页面尺寸，单位为磅（1 英寸 = 72 磅，1 厘米 ≈ 28.35 磅）
-        #page_height =  (27.94 / 2.54) * 72  # 假设页面高度为27.94cm
-        #page_width = (21.59 / 2.54) * 72  # 假设页面宽度为21.59cm
+        page_width =  (27.94 / 2.54) * 72  # 假设页面宽度为27.94cm
+        page_height = (21.59 / 2.54) * 72  # 假设页面高度为21.59cm
 
         # 获取新文档的页面设置对象，并调整页面边距
         page_setup = self.this_doc.PageSetup
@@ -59,9 +59,8 @@ class WordHandler:
         page_setup.Orientation = win32.constants.wdOrientLandscape 
 
         # 获取新文档的页面设置对象，并调整页面尺寸
-        #page_setup.PaperSize = win32.constants.wdPaperCustom
-        #page_setup.PageHeight = page_height
-        #page_setup.PageWidth = page_width
+        page_setup.PageHeight = page_height
+        page_setup.PageWidth = page_width
     
     def set_font_format(self, chinese_font: str, english_font: str, font_size: int, bold: bool):
         """
