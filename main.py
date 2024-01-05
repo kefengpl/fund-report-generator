@@ -21,10 +21,10 @@ def single_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, c
                     fund_name = fund_name, index_name = index_name)
 
 def main():
-    netval_path = "data/图灵进取中证1000指数增强-净值数据.xlsx" # 净值数据表路径，只会处理前两列数据，后面列的数据会被直接忽略。
-    index_path = "data/图灵进取中证1000指数增强-指数数据.xlsx"  # 指数数据表路径：① 非指增：允许添加多列指数数据；② 指增：只允许添加一列指数数据
+    netval_path = "data/衍复指增三号净值数据.xlsx" # 净值数据表路径，只会处理前两列数据，后面列的数据会被直接忽略。
+    index_path = "data/衍复指增三号指数数据.xlsx"  # 指数数据表路径：① 非指增：允许添加多列指数数据；② 指增：只允许添加一列指数数据
     enhanced_fund = True # 需要在参数中手动指明是否是指增类基金，False表示不是指增基金，True表示指增基金
-    corp_name = "图灵基金" # 私募基金管理人名称
+    corp_name = "衍复" # 私募基金管理人名称
     single_fund_report(netval_path, index_path, enhanced_fund, corp_name)
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import pandas as pd
 from datetime import datetime
+import os
 
 # 存放 RGB 三元组。这些颜色的RGB值有的来自于“每周策略观察 PPT”
 color_dict = {
@@ -86,3 +87,11 @@ def drop_suffix(_str: str, suffix: str = "标准化") -> str:
     if _str.endswith(suffix):
         return _str[:-len(suffix)]
     return _str
+
+def create_output_folder():
+    """ 创建 output 文件夹 """
+    # 定义要创建的文件夹名称
+    folder_name = "output"
+    # 检查文件夹是否存在，如果不存在则创建它
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)

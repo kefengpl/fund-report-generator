@@ -6,6 +6,7 @@ from datetime import date
 import fund
 import enhanced_fund as ef
 import word_handler as wh
+import utils
 
 def property_method(enhanced_fund: bool, method_name: str, this_fund):
     """
@@ -36,12 +37,17 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
             ① analyze_text_start_year ，可选参数，它表示获得分析文本的年度收益时，从哪一年开始 \n
             ② history_table_start_year ，可选参数，它表示 历史收益数据表计算月度数据时，从哪一年开始
     """
+    # PART0: 设置输出文件夹，如果有，就不管；如果没有，则创建 output 文件夹
+    utils.create_output_folder()
+
+    # PART0: 接收输入的参数
     fund_name = kwargs.get("fund_name")
     index_name = kwargs.get("index_name")
     analyze_text_start_year = kwargs.get("analyze_text_start_year", None)
     history_table_start_year = kwargs.get("history_table_start_year", None)
     this_fund = ef.EnhancedFund(fund_name, netval_data, index_data, index_name, start_date, create_date) \
                 if enhanced_fund else fund.Fund(fund_name, netval_data, start_date, create_date)
+    
     # PART1：获取生成word所需要的数据
     return_risk_table = this_fund.return_risk_table() # 获取表格“收益风险指标”所有单元格的数据
     history_return_table = property_method(enhanced_fund, "history_return_table", this_fund)(history_table_start_year) # 获取“历史收益分析”所有单元格的数据
@@ -55,7 +61,7 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
     blank_fill = "超额" if enhanced_fund else ""
 
     # PART2：开始写入 WORD
-    word_handler = wh.WordHandler(visible = True) 
+    word_handler = wh.WordHandler(visible = False) 
     word_handler.set_page_layout() # 把 A4 纸横过来
     # 生成标题
     word_handler.add_text_content("1. " + this_fund.fund_name, "title")
