@@ -47,6 +47,13 @@ def main():
     single_fund_report(netval_path, index_path, enhanced_fund, corp_name)
 ```
 
+日期设置。Python 中有多种日期格式，为了保证统一处理，在代码中手动输入的日期格式必须是 datetime.date 格式，下面是一个示例。
+
+```
+from datetime import date
+start_date: date = date(2023, 8, 19) # 注意：日期需要这样按照 年-月-日 来创建
+```
+
 **其它功能**
 
 程序是十分灵活的，在编写时预设了很多可对外调用的函数和方法。如果不希望导出WORD，只希望根据净值数据计算一些指标，比如夏普、年化等，可以参考 [interactive_code.ipynb](interactive_code.ipynb)。
