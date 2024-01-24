@@ -1,0 +1,4 @@
+myenv/*
+output/*
+__pycache__/*
+.vscode/*
