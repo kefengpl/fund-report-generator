@@ -136,7 +136,7 @@ class WordHandler:
         """ 绘制EXCEL图表到WORD里，需要指定EXCEL数据文件路径 """
         # NOTE 插入图片的时候必须设置段落是最小值多少磅，否则图像插入将异常
         self.cursor.ParagraphFormat.LineSpacingRule = win32.constants.wdLineSpaceAtLeast
-        chart_handler = ech.ExcelChartHandler(file_path, False)
+        chart_handler = ech.ExcelChartHandler(file_path, visible = False)
         chart_handler.draw_plot()
         chart_handler.set_chart_style()
         chart_handler.chart.ChartArea.Copy() # 复制图片

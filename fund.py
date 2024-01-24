@@ -1,11 +1,12 @@
 """ 
-此代码之作用在于根据净值数据进行指标计算，与原来500行的交互系统独立运行
+此代码之作用在于根据净值数据进行指标计算
 """
 import math
 import numpy as np
 import pandas as pd
 from datetime import date
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 import date_handler as dh
 import index_handler as ih
@@ -39,10 +40,9 @@ class Fund:
             if start_date not in self.net_val.index:
                 raise ValueError(start_date, "开始日期必须在传入数据的日期序列里")
             self.net_val = self.net_val[self.net_val.index >= start_date] # 手动设置起始日期后会截取净值数据
-        # 设置真正的开始日期[计算开始的日期]，如果人为指定了start_date，他就是指定的日期，否则是第一个有净值数据的日期
-        self.start_date = start_date if start_date is not None else self.get_first_netval_date()  
         self.basic_data = self.get_basic_data()
         self.date_list = self.basic_data.index # 获得日期列表
+        self.rolling_return_data = self.get_rolling_return_data()  # 滚动收益数据表
 
     def get_column_name(self, search_name: str = None) -> str:
         """
@@ -118,6 +118,55 @@ class Fund:
         net_val = net_val.apply(pd.to_numeric, errors = 'coerce')  # 能转数值就转数值，不能的话就转 Nan
         return net_val.interpolate(method='linear') # 线性插值：首部缺失不填充，中部缺失取线性，尾部缺失取尾数
     
+    def check_param_year_month(self, year: int = None, month: int = None):
+        """ 检查后面几个相关函数 year 和 month 的输入是否符合要求 """
+        if month is not None and year is not None:
+            raise ValueError("month 和 year 不能都存在")
+        if year is None and month is None:
+            raise ValueError("month 和 year 不能都不存在")
+    
+    def get_single_rolling_return(self, final_date: date, year: int = None, month: int = None) -> float:
+        """
+        获取滚动收益率，计算方法：比如在 2023-10-20 计算滚动半年，会寻找净值序列中与 2023-4-20 最接近的日期。
+        参数 year 和 month 不能同时存在，也不能都为空，要么指定向前滚动的月份，要么指定向前滚动的年份。
+
+        Args:
+            - final_date (date): 要向前滚动的基准日期
+            - year (int, optional): 向前滚动的年份. Defaults to None.
+            - month (int, optional): 向前滚动的月份，它可以由 year * 12换算得到. Defaults to None.
+                                 
+        Returns:
+            float: 滚动收益率数值
+        """
+        if final_date not in self.date_list:
+            raise ValueError(final_date, "不在输入净值数据的日期序列中")
+        
+        try:
+            raw_begin_date = final_date - (relativedelta(years = year) if month is None else relativedelta(months = month))
+            begin_date: date = dh.find_closest_date(raw_begin_date, self.date_list)
+            return self.net_val[final_date] / self.net_val[begin_date] - 1
+        except:
+            np.nan
+
+    def get_rolling_return(self, year: int = None, month: int = None) -> pd.Series:
+        """
+        从最新日期开始，计算滚动收益。month 和 year 二选一，代表向前滚动 month 个月或者向前滚动 year 年
+        参数 year 和 month 不能同时存在，也不能都为空，要么指定向前滚动的月份，要么指定向前滚动的年份。
+
+        Args:
+            - year (int, optional): 向前滚动的年份. Defaults to None.
+            - month (int, optional): 向前滚动的月份，它可以由 year * 12换算得到. Defaults to None.
+
+        Returns:
+            pd.Series: 指定滚动期限后的滚动收益序列数据
+        """
+        self.check_param_year_month(year, month)
+        rolling_return = pd.Series([np.nan] * len(self.date_list))
+        rolling_return.index = self.date_list
+        for _date in self.date_list:
+            rolling_return[_date] = self.get_single_rolling_return(_date, year, month)
+        return rolling_return
+    
     def get_basic_data(self, contain_standard: bool = True) -> pd.DataFrame:
         """
         Args:
@@ -132,6 +181,24 @@ class Fund:
         if contain_standard: # 计算标准化
             basic_data[self.fund_name + "-标准化"] = self.net_val / self.net_val[self.net_val.first_valid_index()] 
         return basic_data
+    
+    def get_rolling_return_data(self) -> pd.DataFrame:
+        """ 获得半年、一年、二年、三年、五年的滚动收益，列名恰好是 半年、一年、二年、三年、五年 """
+        rolling_return_data = pd.DataFrame()
+        """
+        rolling_return_data["半年"] = self.get_rolling_return(month = 6)
+        rolling_return_data["一年"] = self.get_rolling_return(year = 1)
+        rolling_return_data["二年"] = self.get_rolling_return(year = 2)
+        rolling_return_data["三年"] = self.get_rolling_return(year = 3)
+        rolling_return_data["五年"] = self.get_rolling_return(year = 5)
+        """
+
+        rolling_return_data["半年"] = self.net_val.pct_change(periods = utils.period_lag_dict["半年"])
+        rolling_return_data["一年"] = self.net_val.pct_change(periods = utils.period_lag_dict["一年"])
+        rolling_return_data["二年"] = self.net_val.pct_change(periods = utils.period_lag_dict["二年"])
+        rolling_return_data["三年"] = self.net_val.pct_change(periods = utils.period_lag_dict["三年"])
+        rolling_return_data["五年"] = self.net_val.pct_change(periods = utils.period_lag_dict["五年"])
+        return rolling_return_data
     
     def calculate_drawdown(self) -> pd.Series:
         """
@@ -293,6 +360,34 @@ class Fund:
             result.append((end_year, month))
         return result   
     
+    def recent_month_return(self, month: int) -> float:
+        """
+        以输入数据的最新净值日期为基准，计算最近 month 个月的收益率
+        比如最新日期是2023-10-20， month = 3，代码会自动匹配日期序列中最接近 2023-7-20 的日期
+
+        Args:
+            month (int): 表示的含义是 "近month月"，
+                         比如 month = 6 表示近6个月，month = 12 表示近一年，month = 24 表示近 2 年 
+
+        Returns:
+            float: 近 month 月的收益率数据
+        """
+        try:
+            final_date: date = self.get_last_date()
+            begin_date: date = dh.find_closest_date(final_date - relativedelta(months = month), self.date_list)
+            return self.net_val[final_date] / self.net_val[begin_date] - 1
+        except:
+            np.nan
+    
+    def all_recent_return(self) -> dict:
+        """ 获取 近一月、近三月、近六月、近一年、近两年、近三年 的收益率 """
+        recent_months: list = [1, 3, 6, 12, 24, 36]
+        indicator_list: list = ["近一月", "近三月", "近六月", "近一年", "近两年", "近三年"]
+        result_dict: dict = {}
+        for month, indicator_name in zip(recent_months, indicator_list):
+            result_dict[indicator_name] = self.recent_month_return(month)
+        return result_dict
+    
     def cumulative_return(self) -> dict:
         """ 计算累计收益，就是 最后的净值数据 / 首个净值数据 - 1 """
         return {"累计收益率" : self.net_val[self.get_last_date()] / self.net_val[self.get_first_netval_date()] - 1}
@@ -305,10 +400,32 @@ class Fund:
         return {"年化收益率" : annual_return}
     
     def max_drawdown(self) -> dict:
-        """ 获取最大回撤 """
+        """ 获取历史最大回撤 """
         # 首先需要获取回撤那一列的列名，找不到就报错
         column_name = self.get_column_name("回撤")
         return {"最大回撤" : self.basic_data[column_name].min()}
+    
+    def max_drawdown_of_recent_year(self) -> dict:
+        """ 获取最近一年最大回撤，不足一年的情况下，该函数相当于获取历史最大回撤
+            计算方式：比如最新日期 2023-10-20，函数会寻找最接近 2022-10-20 的日期，并计算 [2022-10-20, 2023-10-20] 闭区间内的最大回撤 """
+        one_year_ago: date = dh.find_closest_date(self.get_last_date() - relativedelta(years = 1), self.date_list)
+        column_name = self.get_column_name("回撤")
+        indicator_name = "过去一年最大回撤"
+        if not one_year_ago:
+            return {indicator_name : self.max_drawdown().values()["最大回撤"]}
+        return {indicator_name : self.basic_data[column_name][one_year_ago:].min()}
+    
+    def max_weekly_drawdown(self) -> dict:
+        """ 计算最大周度回撤 """
+        indicator_name = "最大周度回撤"
+        column_name = self.get_column_name("收益率")
+        return {indicator_name : self.basic_data[column_name].min()}
+    
+    def this_week_return(self) -> dict:
+        """ 获取最新一周的收益率 """
+        indicator_name = "本周收益率"
+        column_name = self.get_column_name("收益率")
+        return {indicator_name : self.basic_data[column_name][self.get_last_date()]}
     
     def annual_volatility(self) -> dict:
         """ 获取年化波动率：NOTE BUG 注意：这里是直接计算的标准差，故可能与周报中的数据有出入 """
@@ -316,10 +433,10 @@ class Fund:
         column_name = self.get_column_name("收益")
         return {"年化波动率" : self.basic_data[column_name].std() * math.sqrt(52)}
     
-    def sharpe_ratio(self, risk_free_rate: int = 0.015) -> dict:
+    def sharpe_ratio(self, risk_free_rate: float = 0.015) -> dict:
         """ 获取夏普比率，无风险利率默认是 1.5% """
-        return {"夏普比率" : (next(iter(self.annual_return().values())) - risk_free_rate) / 
-                next(iter(self.annual_volatility().values()))}
+        return {"夏普比率" : (utils.get_value(self.annual_return()) - risk_free_rate) / 
+                utils.get_value(self.annual_volatility())}
     
     def weekly_win_rate(self) -> dict:
         """ 获取周胜率 = 大于0的周度收益 / 所有有效的收益率数值个数 """
@@ -328,10 +445,77 @@ class Fund:
         weekly_return = self.basic_data[column_name]
         return {"周胜率" : len(weekly_return[weekly_return > 0]) / (~weekly_return.isna()).sum()}
     
+    def decline_std(self) -> dict:
+        """ 计算下行标准差，公式与周报计算一致。求解时只求平方和而不减去均值 """
+        return_data = self.basic_data[self.get_column_name("收益率")]
+        return {"下行标准差" : math.sqrt((return_data[return_data < 0] ** 2).sum() / (return_data.count() - 1))}
+    
+    def decline_std_annualize(self) -> dict:
+        """ 年化下行标准差 """
+        return {"下行标准差年化" : utils.get_value(self.decline_std()) * math.sqrt(52)}
+    
+    def sortino_ratio(self, risk_free_rate: float = 0.015) -> dict:
+        """ 获取索提诺比率，无风险利率默认是 1.5% """
+        return {"Sortino比率" : (utils.get_value(self.annual_return()) - risk_free_rate) / 
+                                utils.get_value(self.decline_std_annualize())}
+    
+    def calmar_ratio(self) -> dict:
+        """ 获取卡玛比 """
+        return {"Calmar比率" : utils.get_value(self.annual_return()) / -utils.get_value(self.max_drawdown())}
+    
+    def is_new_high(self) -> dict:
+        """ 最新日期是否创下新高？ """
+        return {"是否创新高" : "是" if self.net_val[self.get_last_date()] >= self.net_val.max() else "否"}
+    
+    def days_until_new_high(self) -> dict:
+        """ 未创新高的天数 """
+        indicator_name = "未创新高的天数"
+        return {indicator_name : (self.get_last_date() - self.net_val.idxmax()).days}
+    
     def summary_indicators(self) -> dict: 
-        """ 汇总除了 年度收益 和 月度收益 之外的所有指标 """
+        """ 汇总除了 年度收益、月度收益及近期收益 之外的所有指标 """
         return {**self.cumulative_return(), **self.annual_return(), **self.max_drawdown(),
-                **self.annual_volatility(), **self.sharpe_ratio(), **self.weekly_win_rate()}
+                **self.annual_volatility(), **self.sharpe_ratio(), **self.weekly_win_rate(),
+                **self.this_week_return(), **self.max_drawdown_of_recent_year(), **self.max_weekly_drawdown(),
+                **self.decline_std(), **self.decline_std_annualize(), **self.sortino_ratio(),
+                **self.calmar_ratio(), **self.is_new_high(), **self.days_until_new_high()}
+    
+    def get_single_quantile(self, quantile: float, period_name: str) -> float:
+        """
+        获取指定滚动期限的收益率
+
+        Args:
+            quantile (float): 分位数，比如 0.25 代表求解0.25分位数，0.0代表求解最小值
+            period_name (str): 滚动期限，必须是字符串 [半年, 一年, 二年, 三年, 五年] 之一
+        """
+        if period_name not in self.rolling_return_data.columns:
+            raise ValueError(period_name, "必须是下列值之一:", self.rolling_return_data.columns)
+        return self.rolling_return_data[period_name].quantile(quantile)
+    
+    def get_rolling_quantile_dataframe(self) -> pd.DataFrame:
+        """ 获得滚动收益分位数表，即 最小/25分位/中位数/75分位数/最大 """
+        quantile_list = [0.0, 0.25, 0.50, 0.75, 1.00]
+        rolling_periods = self.rolling_return_data.columns
+        result = pd.DataFrame()
+        for period_name in rolling_periods:
+            result[period_name] = [self.get_single_quantile(quantile, period_name) 
+                                   for quantile in quantile_list]
+        result.index = ["最小值", "25分位", "中位数", "75分位", "最大值"]
+        result.index.name = "滚动收益"
+        return result
+    
+    def get_earning_probability(self) -> pd.DataFrame:
+        """ 获得盈利概率表 """
+        prob_list = [0, 0.03, 0.05, 0.10, 0.12, 0.15, 0.18, 0.20]
+        rolling_periods = self.rolling_return_data.columns
+        result = pd.DataFrame()
+        for period_name in rolling_periods:
+            this_period_rolling: pd.Series = self.rolling_return_data[period_name]
+            result[period_name] = [this_period_rolling[this_period_rolling >= prob].count() / this_period_rolling.count()
+                                   for prob in prob_list]
+        result.index = ["{:.0%}".format(prob) for prob in prob_list]
+        result.index.name = "盈利概率"
+        return result
     
     def history_return_table(self, start_year: int = None) -> np.ndarray:
         """
@@ -440,12 +624,11 @@ class Fund:
         Returns:
             返回导出作图文件的名称
         """
-        start_date: date = self.start_date
-        index_handler = ih.IndexHandler(index_data, start_date)
+        index_handler = ih.IndexHandler(index_data, self.get_first_netval_date())
         drawdown_col_name = self.get_column_name("回撤")
         standalized_col_name = self.get_column_name("标准化")
         the_fund_data = self.basic_data[[drawdown_col_name, 
-                                         standalized_col_name]][self.basic_data.index >= start_date]
+                                         standalized_col_name]][self.basic_data.index >= self.get_first_netval_date()]
         the_fund_data.rename(columns = {standalized_col_name : utils.drop_suffix(standalized_col_name),
                                         drawdown_col_name : "最大回撤(右轴)"}, inplace = True)
         return the_fund_data.merge(index_handler.index_data, how = "left", left_index = True, right_index = True)
@@ -469,7 +652,7 @@ class Fund:
 
         blank_fill = "超额" if "超额" in self.fund_name else ""
         fund_name = self.fund_name.rstrip("-超额")
-        start_time = self.start_date.strftime("%Y年%m月")
+        start_time = self.get_first_netval_date().strftime("%Y年%m月")
         cumulative_return = utils.decimal_to_pct(list(self.cumulative_return().values())[0])
         annual_return = utils.decimal_to_pct(list(self.annual_return().values())[0])
         max_drawdown = utils.decimal_to_pct(list(self.max_drawdown().values())[0])
@@ -479,9 +662,9 @@ class Fund:
                        f"年化{blank_fill}收益{annual_return}，产品正常运作以来{blank_fill}最大回撤{max_drawdown}，" + \
                        f"{blank_fill}夏普比率{sharpe_ratio}，{blank_fill}周胜率{weekly_win_rate}。"
         
-        start_year = self.start_date.year if start_year is None else start_year
+        start_year = self.get_first_netval_date().year if start_year is None else start_year
         end_year = self.get_last_date().year
-        start_day = self.start_date.strftime("%m月%d日")
+        start_day = self.get_first_netval_date().strftime("%m月%d日")
         start_year_return = utils.decimal_to_pct(self.one_year_return(start_year))
 
         if start_year == end_year: # NOTE 特殊情况，比如只有2023年需要分析的情况
@@ -489,7 +672,7 @@ class Fund:
             return template_str + f"分年度看，{start_year}年从{start_day}截至{end_day}{blank_fill}收益{start_year_return}。"
         
         yearly_return_str = f"分年度看，{start_year}年从{start_day}到年底{blank_fill}收益{start_year_return}、" \
-                            if start_year == self.start_date.year else f"分年度看，{start_year}年{blank_fill}收益{start_year_return}、"
+                            if start_year == self.get_first_netval_date().year else f"分年度看，{start_year}年{blank_fill}收益{start_year_return}、"
         for year in range(start_year + 1, end_year):
             year_return = utils.decimal_to_pct(self.one_year_return(year))
             yearly_return_str += f"{year}年{blank_fill}收益{year_return}、"
@@ -506,7 +689,7 @@ class Fund:
         Args:
             corp_name(str): 私募报告所涉及私募基金公司的名称
         """
-        start_date_str = self.start_date.strftime("%Y年%m月%d日")
+        start_date_str = self.get_first_netval_date().strftime("%Y年%m月%d日")
         end_date_str = self.get_last_date().strftime("%Y年%m月%d日")
         return f"数据来源：{corp_name}，指标计算区间为{start_date_str}至{end_date_str}。"
         

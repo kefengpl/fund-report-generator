@@ -29,9 +29,11 @@ class ExcelChartHandler:
         self.n_rows = self.used_range.Rows.Count # 使用区域一共有多少行？
         self.n_cols = self.used_range.Columns.Count # 使用区域一共多少列？
         self.line_color_list: list =  list(utils.color_dict.keys())[:self.n_cols - 1] # 绘制线条的颜色列表，以 utils.color_dict 里面的颜色从头开始取
-        self.excel_sheet.Shapes.AddChart(Width = chart_width,Height = chart_height).Select() # 对该sheet对象的所有列添加图表
+        self.excel_sheet.Shapes.AddChart().Select() # 对该sheet对象的所有列添加图表
         self.chart = self.excel_file.ActiveChart # 获取当前选中的图表
         self.chart.SetSourceData(self.excel_sheet.UsedRange) # 设置绘图区域
+        self.chart.chartArea.Width = chart_width # 设置图像的宽度和高度
+        self.chart.chartArea.Height = chart_height
     
     def draw_plot(self):
         """ 对净值数据绘制净值走势曲线，对回撤数据绘制阴影图 """

@@ -16,6 +16,14 @@ color_dict = {
     "blue_green" : (0, 142, 140),
     "shallow_grey" : (191, 191, 191)
 }
+# 记录了周报计算滚动收益的延迟单元格数量
+period_lag_dict = {
+    "半年" : 25,
+    "一年" : 50,
+    "二年" : 101,
+    "三年" : 154,
+    "五年" : 255
+}
 
 def convert_to_RGB(BGR_value: int) -> int:
     """ 通过位运算将 BGR 转为 RGB """
@@ -95,3 +103,9 @@ def create_output_folder():
     # 检查文件夹是否存在，如果不存在则创建它
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
+
+def get_value(the_dict: dict):
+    """ 它的作用是从具有单个键值对的字典中，比如 {"夏普比率" : 2.5} 中提取出数值 2.5 """
+    if len(the_dict) != 1:
+        raise ValueError(f"字典为空或者字典所含键值对的个数大于1，字典键值对个数{len(the_dict)}")
+    return next(iter(the_dict.values()))

@@ -91,3 +91,16 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
     word_handler.add_text_content("", "footnote")
     # 保存文件并退出
     word_handler.close_and_save(this_fund.fund_name)
+
+    # 生成并打印警告信息
+    warning_message1 = f"警告信息1：年化收益率的起始计算日期是 {this_fund.fund_name} 第一个有净值数据的日期 {this_fund.get_first_netval_date()} ，不是周报中的基金成立日期。" \
+                       + "一般情况下计算结果与周报的年化数值十分接近。暂时不支持按照基金成立日期计算年化收益，这是因为①根据利息理论，代码中的算法没有问题；" \
+                       + "②基于兼容性考虑的，因为代码支持用户指定起始计算日期 start_date，如果指定 start_date 后还使用基金成立日期计算年化收益，将得到完全错误的结果。" \
+                       + "如果实在希望使用周报的起始日期计算年化，也是有一些解决方案的：将 annual_return 计算的起始日期 从 第一个净值日期 变更为 基金成立日期 即可"
+    warning_message2 = "警告信息2：年化波动率的计算是直接使用统计学中的标准差公式计算的，与周报中的计算可能有出入" \
+                       + "如果需要按照周报计算规则修改，请对 fund.py 中的 annual_volatility 函数进行修改"
+    warning_message3 = "警告信息3：由于前两个警告信息，将使得夏普比、卡玛比、索提诺比的结果可能会有偏差，这是正常现象，不代表出现了错误，一般情况下偏差会很小。"
+    # 打印警告信息
+    print(warning_message1)
+    # print(warning_message2)
+    print(warning_message3)
