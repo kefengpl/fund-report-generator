@@ -14,11 +14,13 @@ class WordTableHandler:
 
         Args:
             - table (_type_): 一个 word table 对象
-            - title_mode (str): ["sep", "first", "first_row", "first_col"] 
+            - title_mode (str): ["sep", "first", "first_row", "first_col", "weak_sep"] 
                                 "sep" 表示表头按行间隔，会填充第一列；从第一行开始间隔填充行;
+                                "row_sep" 表示表头按行间隔，但不填充第一列，从第一行开始间隔填充行;
                                 "first_row" 表示表头只分布在第一行，所以只会对第一行进行填充;
                                 "first_col" 表示表头只分布在第一列，所以只会对第一列进行填充;
                                 "first" 表示表头分布在第一行以及第一列，所以会对第一行和第一列进行填充.
+                                "weak_sep" 表示表头按行间隔，会填充第一列，从第一行开始间隔填充行，但不会填充第三行;
         """
         self.table = table
         self.table_fill_color = utils.RGB_tuple_to_float(utils.color_dict["deep_red"]) # 填写16进制 RGB，表示表格需要填充的颜色
@@ -27,8 +29,8 @@ class WordTableHandler:
         self.english_font = english_font
         self.font_size = font_size
         self.title_mode = title_mode
-        if self.title_mode not in ["sep", "weak_sep", "first", "first_row", "first_col"]:
-            raise ValueError(r"title_mode 只能是(sep, weak_sep, first, first_row, first_col)之一")
+        if self.title_mode not in ["sep", "weak_sep", "first", "first_row", "first_col", "row_sep"]:
+            raise ValueError(r"title_mode 只能是(sep, weak_sep, first, first_row, first_col, row_sep)之一")
         # 设置表格整体宽度
         self.table.PreferredWidthType = win32.constants.wdPreferredWidthPoints
         self.table.PreferredWidth = table_width
@@ -87,6 +89,8 @@ class WordTableHandler:
             return col_idx == 0 or (row_idx % 2 == 0)
         if self.title_mode == "weak_sep":
             return col_idx == 0 or  (row_idx % 2 == 0 and row_idx != 2)
+        if self.title_mode == "row_sep":
+            return row_idx % 2 == 0
 
     def fill_table_color(self):
         """ 给表格的表头部分上色 """
@@ -100,13 +104,17 @@ class WordTableHandler:
         elif self.title_mode == "sep":
             self.fill_one_line(0, self.table_fill_color, "col")
             for idx in range(self.get_rows()):
-                if idx % 2 == 0:
+                if self.is_table_header(idx, None):
                     self.fill_one_line(idx, self.table_fill_color, "row")
-        else:
+        elif self.title_mode == "weak_sep":
             self.fill_one_line(0, self.table_fill_color, "col")
             for idx in range(self.get_rows()):
-                if idx % 2 == 0 and idx != 2:
+                if self.is_table_header(idx, None):
                     self.fill_one_line(idx, self.table_fill_color, "row")
+        elif self.title_mode == "row_sep":
+            for idx in range(self.get_rows()):
+                if self.is_table_header(idx, None):
+                    self.fill_one_line(idx, self.table_fill_color, "row")        
 
     def set_rows_height(self):
         """ 为表格的每行设置统一的行高 """

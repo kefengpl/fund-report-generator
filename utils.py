@@ -1,5 +1,5 @@
 """ 此文件之作用在于：提供一些大家喜闻乐见的工具函数或者共用变量，或许会用于各个模块 """
-
+import numpy as np
 import pandas as pd
 from datetime import datetime
 import os
@@ -16,14 +16,22 @@ color_dict = {
     "blue_green" : (0, 142, 140),
     "shallow_grey" : (191, 191, 191)
 }
-# 记录了周报计算滚动收益的延迟单元格数量
-period_lag_dict = {
-    "半年" : 25,
-    "一年" : 50,
-    "二年" : 101,
-    "三年" : 154,
-    "五年" : 255
-}
+
+def not_pct_indicator(indicator_name: str) -> bool:
+    """
+    用于排除 夏普、索提诺、卡玛 这三个指标转化为百分比。它们只需要保留一位小数
+
+    Args:
+        indicator_name (str): 指标名称
+
+    Returns:
+        bool: 是不是 夏普、索提诺、卡玛、天数 三者之一，返回 True
+    """
+    check_list = ['夏普', '索提诺', '卡玛', 'Sortino', 'sortino', 'Calmar', 'Calmar', '天数']
+    for elem in check_list:
+        if elem in indicator_name:
+            return False 
+    return True
 
 def convert_to_RGB(BGR_value: int) -> int:
     """ 通过位运算将 BGR 转为 RGB """
@@ -43,6 +51,26 @@ def decimal_to_pct(number: float) -> str:
 def round_decimal(number: float) -> str:
     """ 小数保留1位小数 """
     return "{:.1f}".format(number)
+
+def suitable_convert(number: float, indicator_name: str) -> str:
+    """
+    对字典中的value执行合理的转换。将合理的小数转为百分比并保留一位小数，将一些小数保留一位小数，将nan值转为 '-'
+
+    Args:
+        number (float): _description_
+        indicator_name (str): value 对应的 key，也是指标名称
+
+    Returns:
+        str: 转换后的数值
+    """
+    if type(number) == str:
+        return number
+    if pd.isna(number):
+        return '-'
+    if not_pct_indicator(indicator_name):
+        return decimal_to_pct(number)
+    else:
+        return round_decimal(number)
 
 def dict_to_series(data: dict) -> pd.Series:
     """
@@ -77,7 +105,7 @@ def generate_filename(file_name: str, _suffix: str = ".xlsx") -> str:
     template_str = "{:02d}"
     time_str: str = str(current_time.year)[-2:] + template_str.format(current_time.month) + template_str.format(current_time.day) \
                + template_str.format(current_time.hour) + template_str.format(current_time.minute) + template_str.format(current_time.second)
-    return file_name + time_str + _suffix
+    return file_name +  "_" + time_str + _suffix
 
 def drop_suffix(_str: str, suffix: str = "标准化") -> str:
     """
@@ -109,3 +137,47 @@ def get_value(the_dict: dict):
     if len(the_dict) != 1:
         raise ValueError(f"字典为空或者字典所含键值对的个数大于1，字典键值对个数{len(the_dict)}")
     return next(iter(the_dict.values()))
+
+def df_to_matrix(df: pd.DataFrame) -> np.ndarray:
+    """
+    将输入的 df 数据框转化为 np.array 的矩阵(包括表头以及首列的列名称/行名称)
+    便于直接在 word 中写入表格。此外，会将小数转化为保留1位小数的百分比
+
+    Args:
+        df (pd.DataFrame): 待转换的 dataframe
+
+    Returns:
+        np.ndarray: 转换为 np.array 后的矩阵
+    """
+    value_array = np.array(df)
+    value_array = np.array([[decimal_to_pct(elem) if not pd.isna(elem) else '-' for elem in row] for row in value_array])
+    colname_array = np.array([df.columns])
+    indexname_array = np.array([df.index.name] + list(df.index))
+    indexname_array = indexname_array.reshape(len(indexname_array), 1)
+    return np.c_[indexname_array, np.r_[colname_array, value_array]]
+
+def dict_to_matrix(indicators_dict: dict, column_number: int = 6) -> np.ndarray:
+    """
+    将一个字典数据转化为 np.array 的矩阵
+
+    Args:
+        - indicators_dict (dict): 一个字典，它汇总了各个指标及其数值，比如 {"夏普" : 0.9, "卡玛" : 0.75}
+        - column_number (int): 这个数据表希望有几列？默认是6列。
+
+    Returns:
+        np.ndarray: 转换为 np.array 后的矩阵
+    """
+    indicators_names = list(indicators_dict.keys())
+    indicators_values = list(indicators_dict.values())
+    indicators_values = [suitable_convert(value, name) for (value, name) in zip(indicators_values, indicators_names)]
+    sep_indicators_names = [indicators_names[idx : idx + column_number] 
+                            for idx in range(0, len(indicators_names), column_number)]
+    sep_indicators_values = [indicators_values[idx : idx + column_number] 
+                            for idx in range(0, len(indicators_values), column_number)]
+    sep_indicators_names[-1] += (column_number - len(sep_indicators_names[-1])) * [""]
+    sep_indicators_values[-1] += (column_number - len(sep_indicators_values[-1])) * [""]
+    final_matrix = []
+    for names, values in zip(sep_indicators_names, sep_indicators_values):
+        final_matrix.append(names)
+        final_matrix.append(values)
+    return np.array(final_matrix)

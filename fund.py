@@ -185,19 +185,12 @@ class Fund:
     def get_rolling_return_data(self) -> pd.DataFrame:
         """ 获得半年、一年、二年、三年、五年的滚动收益，列名恰好是 半年、一年、二年、三年、五年 """
         rolling_return_data = pd.DataFrame()
-        """
-        rolling_return_data["半年"] = self.get_rolling_return(month = 6)
-        rolling_return_data["一年"] = self.get_rolling_return(year = 1)
-        rolling_return_data["二年"] = self.get_rolling_return(year = 2)
-        rolling_return_data["三年"] = self.get_rolling_return(year = 3)
-        rolling_return_data["五年"] = self.get_rolling_return(year = 5)
-        """
-
-        rolling_return_data["半年"] = self.net_val.pct_change(periods = utils.period_lag_dict["半年"])
-        rolling_return_data["一年"] = self.net_val.pct_change(periods = utils.period_lag_dict["一年"])
-        rolling_return_data["二年"] = self.net_val.pct_change(periods = utils.period_lag_dict["二年"])
-        rolling_return_data["三年"] = self.net_val.pct_change(periods = utils.period_lag_dict["三年"])
-        rolling_return_data["五年"] = self.net_val.pct_change(periods = utils.period_lag_dict["五年"])
+        window_size = 50 # 同一计算窗口，一年的窗口期是50
+        rolling_return_data["半年"] = self.net_val.pct_change(periods = window_size // 2)
+        rolling_return_data["一年"] = self.net_val.pct_change(periods = window_size)
+        rolling_return_data["二年"] = self.net_val.pct_change(periods = window_size * 2)
+        rolling_return_data["三年"] = self.net_val.pct_change(periods = window_size * 3)
+        rolling_return_data["五年"] = self.net_val.pct_change(periods = window_size * 5)
         return rolling_return_data
     
     def calculate_drawdown(self) -> pd.Series:
@@ -412,7 +405,7 @@ class Fund:
         column_name = self.get_column_name("回撤")
         indicator_name = "过去一年最大回撤"
         if not one_year_ago:
-            return {indicator_name : self.max_drawdown().values()["最大回撤"]}
+            return {indicator_name : self.max_drawdown()["最大回撤"]}
         return {indicator_name : self.basic_data[column_name][one_year_ago:].min()}
     
     def max_weekly_drawdown(self) -> dict:
@@ -511,8 +504,9 @@ class Fund:
         result = pd.DataFrame()
         for period_name in rolling_periods:
             this_period_rolling: pd.Series = self.rolling_return_data[period_name]
-            result[period_name] = [this_period_rolling[this_period_rolling >= prob].count() / this_period_rolling.count()
-                                   for prob in prob_list]
+            valid_count = this_period_rolling.count()
+            result[period_name] = [this_period_rolling[this_period_rolling >= prob].count() / valid_count
+                                   if valid_count != 0 else np.nan for prob in prob_list]
         result.index = ["{:.0%}".format(prob) for prob in prob_list]
         result.index.name = "盈利概率"
         return result
@@ -568,7 +562,8 @@ class Fund:
     
     def get_risk_table_header_indicators(self) -> list:
         """ 生成表格： “收益风险指标” 表头对应的数值"""
-        indicators = self.summary_indicators()
+        indicators = {**self.cumulative_return(), **self.annual_return(), **self.max_drawdown(),
+                **self.annual_volatility(), **self.sharpe_ratio(), **self.weekly_win_rate()}
         return [self.fund_name] +  [utils.round_decimal(indicators[key]) if "夏普" in key else 
                                                utils.decimal_to_pct(indicators[key]) for key in indicators.keys()]
 
