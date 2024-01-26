@@ -118,55 +118,6 @@ class Fund:
         net_val = net_val.apply(pd.to_numeric, errors = 'coerce')  # 能转数值就转数值，不能的话就转 Nan
         return net_val.interpolate(method='linear') # 线性插值：首部缺失不填充，中部缺失取线性，尾部缺失取尾数
     
-    def check_param_year_month(self, year: int = None, month: int = None):
-        """ 检查后面几个相关函数 year 和 month 的输入是否符合要求 """
-        if month is not None and year is not None:
-            raise ValueError("month 和 year 不能都存在")
-        if year is None and month is None:
-            raise ValueError("month 和 year 不能都不存在")
-    
-    def get_single_rolling_return(self, final_date: date, year: int = None, month: int = None) -> float:
-        """
-        获取滚动收益率，计算方法：比如在 2023-10-20 计算滚动半年，会寻找净值序列中与 2023-4-20 最接近的日期。
-        参数 year 和 month 不能同时存在，也不能都为空，要么指定向前滚动的月份，要么指定向前滚动的年份。
-
-        Args:
-            - final_date (date): 要向前滚动的基准日期
-            - year (int, optional): 向前滚动的年份. Defaults to None.
-            - month (int, optional): 向前滚动的月份，它可以由 year * 12换算得到. Defaults to None.
-                                 
-        Returns:
-            float: 滚动收益率数值
-        """
-        if final_date not in self.date_list:
-            raise ValueError(final_date, "不在输入净值数据的日期序列中")
-        
-        try:
-            raw_begin_date = final_date - (relativedelta(years = year) if month is None else relativedelta(months = month))
-            begin_date: date = dh.find_closest_date(raw_begin_date, self.date_list)
-            return self.net_val[final_date] / self.net_val[begin_date] - 1
-        except:
-            np.nan
-
-    def get_rolling_return(self, year: int = None, month: int = None) -> pd.Series:
-        """
-        从最新日期开始，计算滚动收益。month 和 year 二选一，代表向前滚动 month 个月或者向前滚动 year 年
-        参数 year 和 month 不能同时存在，也不能都为空，要么指定向前滚动的月份，要么指定向前滚动的年份。
-
-        Args:
-            - year (int, optional): 向前滚动的年份. Defaults to None.
-            - month (int, optional): 向前滚动的月份，它可以由 year * 12换算得到. Defaults to None.
-
-        Returns:
-            pd.Series: 指定滚动期限后的滚动收益序列数据
-        """
-        self.check_param_year_month(year, month)
-        rolling_return = pd.Series([np.nan] * len(self.date_list))
-        rolling_return.index = self.date_list
-        for _date in self.date_list:
-            rolling_return[_date] = self.get_single_rolling_return(_date, year, month)
-        return rolling_return
-    
     def get_basic_data(self, contain_standard: bool = True) -> pd.DataFrame:
         """
         Args:
