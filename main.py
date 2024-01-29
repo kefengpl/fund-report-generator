@@ -11,7 +11,9 @@ def single_fund_report_interface():
     enhanced_fund = True # 需要在参数中手动指明是否是指增类基金，False表示不是指增基金，True表示指增基金
     corp_name = "裕锦量化" # 私募基金管理人名称，不想写可以删了
     start_date = date(2022, 8, 19)  # 指定开始计算的日期，当然，该参数可以删除，这行也可以删除或者赋值为 None，默认从净值数据的起始日期开始计算。
-    single_fund_report(netval_path, index_path, enhanced_fund, corp_name, start_date = start_date)
+    add_indicators_tables: bool = True # 添加 “关键指标汇总”, “滚动收益率分布”, “收益概率统计” 这三张表
+    single_fund_report(netval_path, index_path, enhanced_fund, corp_name, start_date = start_date,
+                       add_indicators_tables = add_indicators_tables)
 
 def single_fund_indicator_tables_interface():
     """ 生成单个基金产品各类指标(不包括月度/年度指标，因为它们已经汇总在 fund_report中了)汇总表，滚动收益统计表，放在word中 """
@@ -27,7 +29,10 @@ def multi_fund_report_interface():
     start_dates = [] # 从净值数据从前往后按顺序指定起始计算日期。如果有三个基金，仅指定前两个日期，可以写为 [date(2022, 8, 19), date(2022, 9, 19)]
                      # 如果有三个基金，需要指定第一个基金和第三个基金的开始计算日期，可以写为 [date(2022, 8, 19), None, date(2022, 9, 19)]
     corp_names = ["裕锦私募", "图灵量化"] # 从前往后按顺序匹配公司名称，使用方法与 start_dates 的使用完全一致
-    multi_fund_report(netval_path, index_path, enhanced_fund, corp_names = corp_names, start_dates = start_dates)
+    add_indicators_tables: bool = True # 添加 “关键指标汇总”, “滚动收益率分布”, “收益概率统计” 这三张表
+    multi_fund_report(netval_path, index_path, enhanced_fund, corp_names = corp_names, 
+                      start_dates = start_dates, add_indicators_tables = add_indicators_tables)
+    
 
 def multi_fund_indicator_tables_interface():
     """ 生成多个基金产品各类指标(不包括月度/年度指标，因为它们已经汇总在 fund_report中了)汇总表，滚动收益统计表，放在word中 """
@@ -38,6 +43,8 @@ def multi_fund_indicator_tables_interface():
 
 
 def main():
+    # 推荐使用上面 multi_ 开头的函数 
+    # README.md 也给出了这些函数的填写示例
     multi_fund_report_interface()
 
 if __name__ == "__main__":
