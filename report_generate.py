@@ -222,7 +222,7 @@ def generate_word_indicator_tables(netval_data: pd.Series,  corp_name: str = "�
     earning_probability_table = utils.df_to_matrix(earning_probability)
     footer_text = this_fund.get_footnote_text(corp_name) # 获取表格的脚注文本
 
-    blank_fill: str = None if not enhanced_fund else "超额" 
+    blank_fill: str = "" if not enhanced_fund else "超额" 
 
     series_list = ["1.4)", "1.5)", "1.6)"]
     # PART2：开始写入 WORD 
