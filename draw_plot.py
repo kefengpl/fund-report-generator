@@ -1,4 +1,4 @@
-""" 此文件作用在于绘图 """
+""" 此文件作用在于绘图，由于写了Excel绘图的模块，因此该文件也可废弃。但是该文件会给您以后Matplotlib作图带来很大帮助 """
 
 import numpy as np
 import pandas as pd

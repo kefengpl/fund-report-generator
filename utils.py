@@ -2,7 +2,11 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import subprocess
 import os
+
+CORP_DEFAULT_NAME: str = "私募管理人"
+
 
 # 存放 RGB 三元组。这些颜色的RGB值有的来自于“每周策略观察 PPT”
 color_dict = {
@@ -181,3 +185,17 @@ def dict_to_matrix(indicators_dict: dict, column_number: int = 6) -> np.ndarray:
         final_matrix.append(names)
         final_matrix.append(values)
     return np.array(final_matrix)
+
+def kill_process_by_name(process_name):
+    """
+    在运行与office组件的交互之前，先杀死所有WORD和EXCEL进程。
+
+    Args:
+        process_name (_type_): _description_
+    """
+    try:
+        subprocess.run(["taskkill", "/f", "/im", process_name], check=True)
+        print(f"{process_name} 进程被成功强制关闭了.")
+    except subprocess.CalledProcessError as e:
+        print(f"强制关闭进程 {process_name} 失败了: {e}")
+

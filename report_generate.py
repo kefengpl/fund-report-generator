@@ -10,42 +10,6 @@ import enhanced_fund as ef
 import word_handler as wh
 import utils
 
-def single_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, corp_name: str = "私募管理人", **kwargs):
-    """
-    生成一只基金的报告，当然，在本函数体内写循环即可将它改为同时生成多只基金的报告。输出的文件在 output 文件夹下
-
-    Args:
-        - netval_path (str): 净值数据路径，数据表第一列必须是日期，第二列必须是净值数据，且净值数据列名必须等于产品名
-        - index_path (str): 指数数据文件路径，数据表第一列必须是日期，后面的列可以传入多个指数数据(允许传入收盘价)，每列列名必须等于指数名
-        - corp_name (str): 私募管理人名称，如果没有输入该参数，默认是 "私募管理人"
-        - enhanced_fund (bool): 是否是指增基金
-        - start_date (date, optional): 可选参数，起始计算日期，可以不填，如果填写必须填 datetime.date 格式. 
-        - add_indicators_tables (bool, optional): 可选参数，表示是否包含 “关键指标汇总”, “滚动收益率分布”, “收益概率统计” 这三张表
-
-    """
-    netval_data = pd.read_excel(netval_path, index_col = 0)
-    index_data = pd.read_excel(index_path, index_col = 0)
-    fund_name = netval_data.columns[0]
-    index_name = index_data.columns[0] # 注意：index_name 仅适用于指增基金
-    start_date: date = kwargs.get("start_date", None)
-    add_indicators_tables: bool = kwargs.get("add_indicators_tables", False)
-    generate_report(netval_data.iloc[:, 0], index_data, enhanced_fund, corp_name, start_date,
-                    add_indicators_tables = add_indicators_tables, fund_name = fund_name, index_name = index_name)
-
-def single_fund_indicator_tables(netval_path: str, corp_name: str = "私募管理人", **kwargs):
-    """
-    生成单个基金产品各类指标(不包括月度/年度指标)汇总表[对普通基金或指增基金的绝对收益进行统计，而不是超额收益]
-
-    Args:
-        - netval_path (str): 净值数据路径，数据表第一列必须是日期，第二列必须是净值数据，且净值数据列名必须等于产品名
-        - corp_name (str, optional): 私募管理人名称，如果没有输入该参数，默认是 "私募管理人"
-        - start_date (date, optional): 可选参数，起始计算日期，可以不填，如果填写必须填 datetime.date 格式. 
-    """
-    netval_data = pd.read_excel(netval_path, index_col = 0)
-    fund_name = netval_data.columns[0]
-    start_date: date = kwargs.get("start_date", None)
-    generate_word_indicator_tables(netval_data.iloc[:, 0], corp_name, start_date, fund_name = fund_name)
-
 def multi_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, **kwargs):
     """
     生成一只基金的报告，当然，在本函数体内写循环即可将它改为同时生成多只基金的报告。输出的文件在 output 文件夹下
@@ -57,8 +21,6 @@ def multi_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, **
         - corp_names (list[str]): 可选参数，私募管理人名称列表，如果没有输入该参数，默认是 "私募管理人"
         - start_dates (list[date]): 可选参数，起始计算日期列表，可以不填，如果填写必须填 datetime.date 格式. 
         - add_indicators_tables (bool, optional): 可选参数，表示是否包含 “关键指标汇总”, “滚动收益率分布”, “收益概率统计” 这三张表
-
-
     """
     netval_data = pd.read_excel(netval_path, index_col = 0)
     index_data = pd.read_excel(index_path, index_col = 0)
@@ -68,36 +30,20 @@ def multi_fund_report(netval_path: str, index_path: str, enhanced_fund: bool, **
     index_name = index_data.columns[0] # 仅用于指增基金，用于给定标准的指数名称，便于后续处理
     start_dates: list = kwargs.get("start_dates", [])
     corp_names: list = kwargs.get("corp_names", [])
+    corp_names = [utils.CORP_DEFAULT_NAME if not elem else elem for elem in corp_names]
     start_dates += (funds_num - len(start_dates)) * [None]
-    corp_names += (funds_num - len(corp_names)) * ["私募管理人"]
+    corp_names += (funds_num - len(corp_names)) * [utils.CORP_DEFAULT_NAME]
     add_indicators_tables: bool = kwargs.get("add_indicators_tables", False)
-    for idx in tqdm(range(funds_num)):
+
+    # utils.kill_process_by_name("WINWORD.EXE")  # 杀死所有Word进程
+    # utils.kill_process_by_name("EXCEL.EXE")    # 杀死所有Excel进程
+
+    for idx in tqdm(range(funds_num)):   
         generate_report(netval_data.iloc[:, idx], index_data, enhanced_fund, corp_names[idx], start_dates[idx],
                         add_indicators_tables = add_indicators_tables, fund_name = fund_names[idx], index_name = index_name)
 
-def multi_fund_indicator_tables(netval_path: str, **kwargs):
-    """
-    生成一只基金的报告，当然，在本函数体内写循环即可将它改为同时生成多只基金的报告。输出的文件在 output 文件夹下
-
-    Args:
-        - netval_path (str): 净值数据路径，数据表第一列必须是日期，第二列必须是净值数据，且净值数据列名必须等于产品名
-        - corp_names (list[str]): 可选参数，私募管理人名称列表，如果没有输入该参数，默认是 "私募管理人"
-        - start_dates (list[date]): 可选参数，起始计算日期列表，可以不填，如果填写必须填 datetime.date 格式. 
-
-    """
-    netval_data = pd.read_excel(netval_path, index_col = 0)
-    funds_num: int = len(netval_data.columns)
-    print(f"净值数据表中有{funds_num}只基金：", netval_data.columns)
-    fund_names: list = netval_data.columns
-    start_dates: list = kwargs.get("start_dates", [])
-    corp_names: list = kwargs.get("corp_names", [])
-    start_dates += (funds_num - len(start_dates)) * [None]
-    corp_names += (funds_num - len(corp_names)) * ["私募管理人"]
-    for idx in tqdm(range(funds_num)):
-        generate_word_indicator_tables(netval_data.iloc[:, idx], corp_names[idx], start_dates[idx], fund_name = fund_names[idx])
-
 def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_fund: bool,
-                    corp_name: str = "私募管理人", start_date: date = None, create_date: date = None, 
+                    corp_name: str = utils.CORP_DEFAULT_NAME, start_date: date = None, create_date: date = None, 
                     add_indicators_tables: bool = False, **kwargs):
     """
     生成单个基金产品报告的WORD。填入参数时注意参数类型。pd.Sries和pd.DataFrame是两种类型，需要区分。
@@ -176,7 +122,7 @@ def generate_report(netval_data: pd.Series, index_data: pd.DataFrame, enhanced_f
     # 保存文件并退出
     word_handler.close_and_save(this_fund.fund_name)
     # 生成并打印警告信息
-    print_warning_messages(this_fund.fund_name, this_fund.get_first_netval_date())
+    print_warning_messages(this_fund.fund_name, this_fund.get_first_netval_date(), this_fund.get_last_date())
 
 
 
@@ -261,25 +207,26 @@ def generate_word_indicator_tables(netval_data: pd.Series,  corp_name: str = "�
     # 保存文件并退出
     word_handler.close_and_save(output_file_name)
     # 打印警告信息
-    print_warning_messages(this_fund.fund_name, this_fund.get_first_netval_date())
+    print_warning_messages(this_fund.fund_name, this_fund.get_first_netval_date(), this_fund.get_last_date())
 
 def property_method(enhanced_fund: bool, method_name: str, this_fund):
     """
     根据是否是指增基金调用合适的方法，返回的是方法对象。适用于一些需要调用 excess 相关方法的情况
 
     Args:
-        enhanced_fund (True): 是否是指增基金
-        method_name (str): 调用的方法名称
+        - enhanced_fund (bool): 是否是指增基金
+        - method_name (str): 调用的方法名称
     """
     return getattr(this_fund.excess, method_name) if enhanced_fund else getattr(this_fund, method_name)
 
-def print_warning_messages(fund_name: str, first_netval_date: date):
+def print_warning_messages(fund_name: str, first_netval_date: date, last_netval_date: date):
     """
-    打印警告信息
+    打印警告或者提示信息
 
     Args:
-        - fund_name (str): _description_
-        - first_netval_date (date): _description_
+        - fund_name (str): 基金名称
+        - first_netval_date (date): 计算区间起始日期
+        - last_netval_date (date): 计算区间结束日期
     """
     finish_message = f"----------------------------------{fund_name} 已经计算完成----------------------------------"
     # 生成并打印警告信息
@@ -291,5 +238,6 @@ def print_warning_messages(fund_name: str, first_netval_date: date):
     warning_message2 = "警告信息2：由于警告信息1，将使得夏普比、卡玛比、索提诺比的结果可能会有偏差，这是正常现象，不代表出现了错误，一般情况下偏差会很小。"
     # 打印警告信息
     print(finish_message)
-    print(warning_message1)
-    print(warning_message2)
+    print(f"计算起始日期是 {first_netval_date}, 末尾日期是 {last_netval_date}")
+    # print(warning_message1)
+    # print(warning_message2)
