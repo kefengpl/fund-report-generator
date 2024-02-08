@@ -154,6 +154,15 @@ module 'win32com.gen_py.00020905-0000-0000-C000-000000000046x0x8x7' has no attri
 解决方法：删除 %TEMP%/gen_py ， %TEMP% 是一种路径，可以在环境变量中查到具体路径是什么
 参考URL：https://github.com/mhammond/pywin32/issues/1694
 
+- **Python与Office交互时异常，在PageSetUp处报错**
+
+这可能是由于原有WORD或者EXCEL开启导致的。一种暴力的解决办法是，在交互代码运行前杀死原有的WORD或者EXCEL进程(进程可以理解为你打开的、正在运行的软件;软件本身不是进程，但是正在运行的软件可以称作一个进程)。如果你希望开启这个杀死进程的功能，可以把[report_generate.py](report_generate.py)文件如下面所示这两行代码(大概在38~39行)的注释打开。**一定要当心！运行这两行代码后将导致你原有打开的所有WORD和EXCEL文档都被关闭，并且不会被保存！！！！**
+
+```
+# utils.kill_process_by_name("WINWORD.EXE")  # 杀死所有Word进程
+# utils.kill_process_by_name("EXCEL.EXE")    # 杀死所有Excel进程
+```
+
 **其它功能**
 
 程序是十分灵活的，在编写时预设了很多可对外调用的函数和方法。如果不希望导出WORD，只希望根据净值数据计算一些指标，比如夏普、年化等，可以参考 [interactive_code.ipynb](interactive_code.ipynb)。
