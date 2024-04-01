@@ -163,7 +163,7 @@ module 'win32com.gen_py.00020905-0000-0000-C000-000000000046x0x8x7' has no attri
 # utils.kill_process_by_name("EXCEL.EXE")    # 杀死所有Excel进程
 ```
 
-```
+```Python
 def multi_fund_report_interface():
     """ 在基金对的标指数数据一致的情况下，允许同时导出多个基金的基金报告。"""
     netval_path = "data/非指增批量测试数据.xlsx" # 净值数据表路径，可以包含多个基金，每个基金的数据是一列，列名是基金名称。不要出现任何冗余列。
